@@ -77,12 +77,10 @@ python jxls_migration_tool.py input.xls -f output.xlsx
 ## 📖 Documentation
 
 - **[Usage Guide](docs/USAGE.md)** - Detailed usage instructions
+- **[使用指南](docs/USAGE_ZH.md)** - 中文版详细使用说明
 - **[API Documentation](docs/API.md)** - Programmatic API reference
 - **[Examples](examples/)** - Code examples and use cases
 - **[Changelog](docs/CHANGELOG.md)** - Version history and changes
-
-## 🛠️ Command Line Options
-
 ```
 usage: jxls_migration_tool.py [-h] [-o OUTPUT] [-f] [--keep-extension]
                               [--dry-run] [-v] [--verbose]
