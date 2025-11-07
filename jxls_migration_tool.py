@@ -887,7 +887,7 @@ class JxlsMigrationTool:
 
             try:
                 # 使用健壮的迁移方法，支持自动回退
-                result = self.robust_migrate_file(str(excel_file), str(output_file))
+                result = self.migrate_file(str(excel_file), str(output_file))
                 self.results.append(result)
 
                 # 显示尝试记录（如果有）
@@ -971,19 +971,34 @@ class JxlsMigrationTool:
         result['attempts'].append(f"第一次尝试: 检测格式为 {detected_format}")
         self.logger.info(f"  第一次尝试: 使用 {detected_format.upper()} 处理器")
 
-        try:
-            if detected_format == 'xlsx':
-                self.logger.debug(f"  调用 migrate_xlsx_file")
-                result.update(self.migrate_xlsx_file(input_path, output_path))
-            else:
-                self.logger.debug(f"  调用 migrate_xls_file")
-                result.update(self.migrate_xls_file(input_path, output_path))
-        except Exception as e:
-            result['attempts'].append(f"第一次尝试失败: {type(e).__name__}: {e}")
-            self.logger.warning(f"  第一次尝试失败: {e}")
+        # 第一次尝试
+        if detected_format == 'xlsx':
+            self.logger.debug(f"  调用 migrate_xlsx_file")
+            result.update(self.migrate_xlsx_file(input_path, output_path))
+        else:
+            self.logger.debug(f"  调用 migrate_xls_file")
+            result.update(self.migrate_xls_file(input_path, output_path))
+
+        # 如果第一次尝试失败，进行第二次尝试
+        if not result['success']:
+            result['attempts'].append(f"第一次尝试失败: {result.get('error', '未知错误')}")
+            self.logger.warning(f"  第一次尝试失败: {result.get('error', '未知错误')}")
+            self.logger.info(f"  🔄 第一次尝试失败，尝试备用处理器")
+
+            # 重置结果，准备第二次尝试
+            result = {
+                'source': input_path,
+                'target': output_path,
+                'success': False,
+                'sheets': [],
+                'changes': [],
+                'total_commands': 0,
+                'converted_commands': 0,
+                'error': None,
+                'attempts': result['attempts']  # 保留第一次的尝试记录
+            }
 
             # 第二次尝试：强制使用另一种格式处理器
-            self.logger.info(f"  🔄 第一次尝试失败，尝试备用处理器")
             try:
                 if detected_format == 'xlsx':
                     result['attempts'].append("第二次尝试: 使用XLS处理器")
@@ -995,10 +1010,10 @@ class JxlsMigrationTool:
                     result.update(self.migrate_xlsx_file(input_path, output_path))
             except Exception as fallback_error:
                 result['attempts'].append(f"第二次尝试失败: {type(fallback_error).__name__}: {fallback_error}")
-                result['error'] = f"所有尝试都失败: 主错误={type(e).__name__}, 备用错误={type(fallback_error).__name__}"
+                result['error'] = f"所有尝试都失败: 第一次错误={result.get('error', '未知')}, 第二次错误={type(fallback_error).__name__}"
                 self.logger.error(f"  ❌ 所有迁移尝试都失败")
-                self.logger.error(f"     主错误: {e}")
-                self.logger.error(f"     备用错误: {fallback_error}")
+                self.logger.error(f"     第一次错误: {result.get('error', '未知')}")
+                self.logger.error(f"     第二次错误: {fallback_error}")
 
         return result
 
@@ -2014,7 +2029,7 @@ def main():
             tool.logger = setup_logging(None, args.dry_run, args.verbose)
 
             # 使用健壮的迁移方法，支持自动回退
-            result = tool.robust_migrate_file(args.input, args.output)
+            result = tool.migrate_file(args.input, args.output)
 
             # 显示尝试记录（如果有回退）
             if 'attempts' in result and len(result['attempts']) > 1:
