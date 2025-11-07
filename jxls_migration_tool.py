@@ -9,6 +9,7 @@
 import sys
 import os
 
+
 def setup_unicode_support():
     """设置 Unicode 支持 - 生产环境优化"""
     if os.name == "nt":
@@ -31,11 +32,12 @@ def setup_unicode_support():
         except:
             pass
 
+
 # 初始化 Unicode 支持
 setup_unicode_support()
 
 """
-JXLS 1.x → 2.14.0 自动化迁移工具 (v3.3 - 统一健壮版)
+JXLS 1.x → 2.14.0 自动化迁移工具 (v3.4 - 修复版)
 
 功能特性:
   • 指令转换: forEach→each, if(test→condition), out→${}, area自动生成, multiSheet支持
@@ -45,9 +47,10 @@ JXLS 1.x → 2.14.0 自动化迁移工具 (v3.3 - 统一健壮版)
   • 报告生成: Markdown + JSON + DEBUG日志
   • 健壮迁移: 自动格式检测 + 双重处理器回退机制 (统一API)
   • 错误修复: 修复 'Format' object has no attribute 'font_index' 错误
+  • 关键修复: 修复jx:each注释不生成和jx:area位置错误问题
 
-版本: 3.3  |  作者: fivefish  |  日期: 2025-11-07
-更新: 将 robust_migrate_file 提升为标准 migrate_file，简化API
+版本: 3.4  |  作者: fivefish  |  日期: 2025-11-07
+更新: 修复jx:each注释生成和jx:area位置问题
 使用: python jxls_migration_tool.py --help
 """
 
@@ -189,14 +192,18 @@ def safe_detect_excel_format(file_path: str, logger: Optional[logging.Logger] = 
     """
     try:
         format_result = detect_excel_format(file_path)
+        file_ext = Path(file_path).suffix.lower()
 
         if format_result:
             if logger:
+                if format_result == 'xlsx' and file_ext == '.xls':
+                    logger.warning(f"  ⚠️  文件 '{Path(file_path).name}' 后缀为.xls但实际格式为.xlsx")
+                elif format_result == 'xls' and file_ext == '.xlsx':
+                    logger.warning(f"  ⚠️  文件 '{Path(file_path).name}' 后缀为.xlsx但实际格式为.xls")
                 logger.debug(f"  格式检测结果: {format_result}")
             return format_result
 
         # 如果检测失败，尝试通过文件扩展名判断
-        file_ext = Path(file_path).suffix.lower()
         if logger:
             logger.debug(f"  自动检测失败，使用扩展名判断: {file_ext}")
 
@@ -752,7 +759,8 @@ class ExcelFormatConverter:
 
         except Exception as e:
             # 记录详细错误信息用于调试
-            logging.debug(f"复制单元格格式失败 (row={getattr(xls_cell, 'row', 'N/A')}, col={getattr(xls_cell, 'col', 'N/A')}): {e}")
+            logging.debug(
+                f"复制单元格格式失败 (row={getattr(xls_cell, 'row', 'N/A')}, col={getattr(xls_cell, 'col', 'N/A')}): {e}")
 
 
 # ============================================================================
@@ -828,7 +836,7 @@ class JxlsMigrationTool:
         self.logger = setup_logging(log_file, self.dry_run, self.verbose)
 
         self.logger.info("=" * 80)
-        self.logger.info("JXLS 1.x → 2.14.0 自动化迁移工具（生产级完整版）")
+        self.logger.info("JXLS 1.x → 2.14.0 自动化迁移工具（修复版 v3.4）")
         self.logger.info("=" * 80)
         self.logger.info(f"输入目录: {input_dir}")
         self.logger.info(f"输出目录: {output_path}")
@@ -900,7 +908,8 @@ class JxlsMigrationTool:
                     self.stats['commands_found'] += result.get('total_commands', 0)
                     self.stats['commands_converted'] += result.get('converted_commands', 0)
                     self.logger.info(f"  ✅ 成功: {output_file.name}")
-                    self.logger.info(f"    发现 {result.get('total_commands', 0)} 个命令，转换 {result.get('converted_commands', 0)} 个")
+                    self.logger.info(
+                        f"    发现 {result.get('total_commands', 0)} 个命令，转换 {result.get('converted_commands', 0)} 个")
                 else:
                     self.stats['failed'] += 1
                     self.logger.error(f"  ❌ 失败: {excel_file.name} - {result.get('error', '未知错误')}")
@@ -1010,7 +1019,8 @@ class JxlsMigrationTool:
                     result.update(self.migrate_xlsx_file(input_path, output_path))
             except Exception as fallback_error:
                 result['attempts'].append(f"第二次尝试失败: {type(fallback_error).__name__}: {fallback_error}")
-                result['error'] = f"所有尝试都失败: 第一次错误={result.get('error', '未知')}, 第二次错误={type(fallback_error).__name__}"
+                result[
+                    'error'] = f"所有尝试都失败: 第一次错误={result.get('error', '未知')}, 第二次错误={type(fallback_error).__name__}"
                 self.logger.error(f"  ❌ 所有迁移尝试都失败")
                 self.logger.error(f"     第一次错误: {result.get('error', '未知')}")
                 self.logger.error(f"     第二次错误: {fallback_error}")
@@ -1190,6 +1200,12 @@ class JxlsMigrationTool:
             result['total_commands'] = len(commands)
             self.logger.info(f"    发现 {len(commands)} 个JXLS命令")
 
+            if commands:
+                self.logger.debug(f"    命令详情:")
+                for cmd in commands:
+                    self.logger.debug(
+                        f"      - {type(cmd).__name__}: row={cmd.location.row}, text={cmd.raw_text[:50]}...")
+
             # 处理命令并迁移数据
             conversion_result = self.process_commands_and_migrate_data(
                 commands, xls_sheet, xls_book, xlsx_sheet, 'xls'
@@ -1200,6 +1216,12 @@ class JxlsMigrationTool:
             result['success'] = True
 
             self.logger.info(f"    转换 {conversion_result['converted_commands']} 个命令")
+
+            # 检查是否成功添加了注释
+            if conversion_result['converted_commands'] > 0:
+                self.logger.info(f"    ✅ 成功转换命令")
+            else:
+                self.logger.warning(f"    ⚠️ 未转换任何命令")
 
         except Exception as e:
             result['error'] = f"{type(e).__name__}: {str(e)}"
@@ -1254,7 +1276,7 @@ class JxlsMigrationTool:
 
     def detect_jxls_commands(self, xls_sheet, sheet_name: str) -> List[JxlsCommand]:
         """
-        检测XLS Sheet中的JXLS命令
+        检测XLS Sheet中的JXLS命令 - 修复版本
 
         Args:
             xls_sheet: xlrd的Sheet对象
@@ -1269,39 +1291,44 @@ class JxlsMigrationTool:
             for col_idx in range(xls_sheet.ncols):
                 cell = xls_sheet.cell(row_idx, col_idx)
                 if cell.value:
-                    value = str(cell.value)
+                    value = str(cell.value).strip()
                     location = CommandLocation(row_idx, col_idx, sheet_name)
 
-                    # 检测area
-                    if 'jx:area' in value and not value.strip().startswith('/'):
+                    # 检测area - 更宽松的匹配
+                    if 'jx:area' in value.lower() and not value.startswith('/'):
                         cmd = AreaCommand(location, value)
                         commands.append(cmd)
+                        self.logger.debug(f"      检测到area命令: {value}")
 
-                    # 检测forEach
-                    elif 'jx:forEach' in value and not value.strip().startswith('/'):
+                    # 检测forEach - 更宽松的匹配
+                    elif 'jx:foreach' in value.lower() and not value.startswith('/'):
                         cmd = ForEachCommand(location, value)
                         commands.append(cmd)
+                        self.logger.debug(f"      检测到forEach命令: {value}")
 
-                    # 检测if
-                    elif 'jx:if' in value and not value.strip().startswith('/'):
+                    # 检测if - 更宽松的匹配
+                    elif 'jx:if' in value.lower() and not value.startswith('/'):
                         cmd = IfCommand(location, value)
                         commands.append(cmd)
+                        self.logger.debug(f"      检测到if命令: {value}")
 
-                    # 检测multiSheet
-                    elif 'jx:multiSheet' in value and not value.strip().startswith('/'):
+                    # 检测multiSheet - 更宽松的匹配
+                    elif 'jx:multisheet' in value.lower() and not value.startswith('/'):
                         cmd = MultiSheetCommand(location, value)
                         commands.append(cmd)
+                        self.logger.debug(f"      检测到multiSheet命令: {value}")
 
                     # 检测out (单独单元格中的jx:out)
-                    elif '<jx:out' in value or 'jx:out(' in value:
+                    elif '<jx:out' in value.lower() or 'jx:out(' in value.lower():
                         cmd = OutCommand(location, value)
                         commands.append(cmd)
+                        self.logger.debug(f"      检测到out命令: {value}")
 
         return commands
 
     def detect_jxls_commands_xlsx(self, ws: Worksheet, sheet_name: str) -> List[JxlsCommand]:
         """
-        检测XLSX Sheet中的JXLS命令
+        检测XLSX Sheet中的JXLS命令 - 修复版本
 
         Args:
             ws: openpyxl的Worksheet对象
@@ -1315,42 +1342,47 @@ class JxlsMigrationTool:
         for row_idx, row in enumerate(ws.iter_rows()):
             for col_idx, cell in enumerate(row):
                 if cell.value:
-                    value = str(cell.value)
+                    value = str(cell.value).strip()
                     location = CommandLocation(row_idx, col_idx, sheet_name)
 
-                    # 检测area
-                    if 'jx:area' in value and not value.strip().startswith('/'):
+                    # 检测area - 更宽松的匹配
+                    if 'jx:area' in value.lower() and not value.startswith('/'):
                         cmd = AreaCommand(location, value)
                         commands.append(cmd)
+                        self.logger.debug(f"      检测到area命令: {value}")
 
-                    # 检测forEach
-                    elif 'jx:forEach' in value and not value.strip().startswith('/'):
+                    # 检测forEach - 更宽松的匹配
+                    elif 'jx:foreach' in value.lower() and not value.startswith('/'):
                         cmd = ForEachCommand(location, value)
                         commands.append(cmd)
+                        self.logger.debug(f"      检测到forEach命令: {value}")
 
-                    # 检测if
-                    elif 'jx:if' in value and not value.strip().startswith('/'):
+                    # 检测if - 更宽松的匹配
+                    elif 'jx:if' in value.lower() and not value.startswith('/'):
                         cmd = IfCommand(location, value)
                         commands.append(cmd)
+                        self.logger.debug(f"      检测到if命令: {value}")
 
-                    # 检测multiSheet
-                    elif 'jx:multiSheet' in value and not value.strip().startswith('/'):
+                    # 检测multiSheet - 更宽松的匹配
+                    elif 'jx:multisheet' in value.lower() and not value.startswith('/'):
                         cmd = MultiSheetCommand(location, value)
                         commands.append(cmd)
+                        self.logger.debug(f"      检测到multiSheet命令: {value}")
 
                     # 检测out (单独单元格中的jx:out)
-                    elif '<jx:out' in value or 'jx:out(' in value:
+                    elif '<jx:out' in value.lower() or 'jx:out(' in value.lower():
                         cmd = OutCommand(location, value)
                         commands.append(cmd)
+                        self.logger.debug(f"      检测到out命令: {value}")
 
         return commands
 
     def process_commands_and_migrate_data(self, commands: List[JxlsCommand],
-                                        xls_sheet, xls_book,
-                                        xlsx_sheet: Worksheet,
-                                        format_type: str) -> Dict[str, Any]:
+                                          xls_sheet, xls_book,
+                                          xlsx_sheet: Worksheet,
+                                          format_type: str) -> Dict[str, Any]:
         """
-        处理命令并迁移数据（用于XLS格式）
+        处理命令并迁移数据（用于XLS格式） - 修复版本
 
         Args:
             commands: JXLS命令列表
@@ -1372,10 +1404,17 @@ class JxlsMigrationTool:
         comments_to_add = []  # (row, col, comment_text)
         area_commands = []
 
+        self.logger.debug(f"      开始处理 {len(commands)} 个命令")
+
         # 处理每个命令
         for cmd in commands:
+            self.logger.debug(f"      处理命令: {type(cmd).__name__} at row {cmd.location.row}")
+
             if isinstance(cmd, ForEachCommand):
+                self.logger.debug(f"      处理forEach命令: {cmd.raw_text}")
                 end_row = self.find_end_tag(xls_sheet, cmd.location.row, '/jx:forEach')
+                self.logger.debug(f"      找到结束标签位置: {end_row}")
+
                 if end_row is not None:
                     cmd.end_location = CommandLocation(end_row, cmd.location.col, cmd.location.sheet_name)
                     cmd.data_location = CommandLocation(cmd.location.row + 1, cmd.location.col, cmd.location.sheet_name)
@@ -1383,10 +1422,18 @@ class JxlsMigrationTool:
                     rows_to_delete.add(cmd.location.row)
                     rows_to_delete.add(end_row)
 
+                    self.logger.debug(f"      标记删除行: {cmd.location.row}, {end_row}")
+
                     # 计算lastCell
                     last_col = self.find_last_data_column(xls_sheet, cmd.data_location.row)
-                    adjusted_data_row = cmd.data_location.row - len([r for r in rows_to_delete if r < cmd.data_location.row])
+                    self.logger.debug(f"      最后数据列: {last_col}")
+
+                    # 计算调整后的数据行号
+                    adjusted_data_row = cmd.data_location.row - len(
+                        [r for r in rows_to_delete if r < cmd.data_location.row])
                     last_cell = f"{get_column_letter(last_col + 1)}{adjusted_data_row + 1}"
+
+                    self.logger.debug(f"      调整后数据行: {adjusted_data_row}, lastCell: {last_cell}")
 
                     comment_text = cmd.to_jx_each(last_cell)
                     comments_to_add.append((adjusted_data_row, 1, comment_text))
@@ -1398,6 +1445,11 @@ class JxlsMigrationTool:
                     })
                     result['converted_commands'] += 1
 
+                    self.logger.info(f"      ✅ 转换forEach: {comment_text}")
+
+                else:
+                    self.logger.warning(f"      ⚠️ 未找到forEach结束标签")
+
             elif isinstance(cmd, IfCommand):
                 end_row = self.find_end_tag(xls_sheet, cmd.location.row, '/jx:if')
                 if end_row is not None:
@@ -1408,7 +1460,8 @@ class JxlsMigrationTool:
                     rows_to_delete.add(end_row)
 
                     last_col = self.find_last_data_column(xls_sheet, cmd.data_location.row)
-                    adjusted_data_row = cmd.data_location.row - len([r for r in rows_to_delete if r < cmd.data_location.row])
+                    adjusted_data_row = cmd.data_location.row - len(
+                        [r for r in rows_to_delete if r < cmd.data_location.row])
                     last_cell = f"{get_column_letter(last_col + 1)}{adjusted_data_row + 1}"
 
                     comment_text = cmd.to_jx_if_v2(last_cell)
@@ -1423,12 +1476,19 @@ class JxlsMigrationTool:
 
             elif isinstance(cmd, AreaCommand):
                 area_commands.append(cmd)
+                # 现有的area命令 - 在原始位置添加注释
+                comment_text = cmd.to_jx_area_v2()
+                # 计算调整后的行号（考虑删除的行）
+                adjusted_row = cmd.location.row - len([r for r in rows_to_delete if r < cmd.location.row])
+                comments_to_add.append((adjusted_row, cmd.location.col, comment_text))
+
                 result['changes'].append({
                     'type': 'area',
                     'row': cmd.location.row + 1,
-                    'action': f'保留area命令: {cmd.raw_text}'
+                    'action': f'保留area命令: {comment_text}'
                 })
                 result['converted_commands'] += 1
+                self.logger.info(f"      ✅ 保留area命令: {comment_text}")
 
             elif isinstance(cmd, MultiSheetCommand):
                 comment_text = cmd.to_jx_multi_sheet_v2()
@@ -1441,6 +1501,9 @@ class JxlsMigrationTool:
                     'action': f'转换multiSheet，添加注释: {comment_text}'
                 })
                 result['converted_commands'] += 1
+
+        self.logger.debug(f"      总共标记删除 {len(rows_to_delete)} 行")
+        self.logger.debug(f"      需要添加 {len(comments_to_add)} 个注释")
 
         # 复制所有单元格（跳过要删除的行）
         row_mapping = {}  # 旧行号 -> 新行号
@@ -1484,28 +1547,34 @@ class JxlsMigrationTool:
 
             new_row += 1
 
-        # 自动生成area命令（如果没有现有的）
+        # 自动生成area命令（如果没有现有的）- 修复位置为A1
         if not area_commands and (rows_to_delete or comments_to_add):
             # 计算数据区域
             last_data_row = new_row - 1
             last_data_col = 0
+
+            # 找到最后一个有数据的列
             for col_idx in range(xls_sheet.ncols):
                 for row_idx in range(xls_sheet.nrows):
                     if row_idx not in rows_to_delete and xls_sheet.cell(row_idx, col_idx).value:
-                        last_data_col = col_idx
+                        last_data_col = max(last_data_col, col_idx)
                         break
 
             if last_data_row > 0 and last_data_col > 0:
                 last_cell = f"{get_column_letter(last_data_col + 1)}{last_data_row}"
                 area_comment = f'jx:area(lastCell="{last_cell}")'
-                comments_to_add.append((1, 1, area_comment))  # 在A1添加area注释
+
+                # 修复：在A1单元格添加area注释，而不是数据行的A1
+                comments_to_add.append((0, 0, area_comment))  # 在A1添加area注释 (row=0, col=0)
 
                 result['changes'].append({
                     'type': 'area',
-                    'row': 1,
+                    'row': 1,  # Excel行号从1开始
+                    'col': 1,
                     'action': f'自动添加area命令: {area_comment}'
                 })
                 result['converted_commands'] += 1
+                self.logger.info(f"      ✅ 自动生成area命令: {area_comment}")
 
         # 复制列宽
         try:
@@ -1550,20 +1619,28 @@ class JxlsMigrationTool:
         except Exception as e:
             self.logger.debug(f"      复制合并单元格失败: {e}")
 
-        # 添加注释
+        # 添加注释 - 修复注释位置计算
         for row, col, comment_text in comments_to_add:
             try:
-                cell = xlsx_sheet.cell(row=row + 1, column=col)  # openpyxl行号从1开始
+                # 计算在openpyxl中的实际行号（考虑删除的行）
+                actual_row = row + 1  # openpyxl行号从1开始
+
+                # 如果是area注释且row=0，说明要在A1添加
+                if row == 0 and 'jx:area' in comment_text:
+                    actual_row = 1
+                    self.logger.debug(f"      在A1添加area注释: {comment_text}")
+
+                cell = xlsx_sheet.cell(row=actual_row, column=col + 1)
                 cell.comment = Comment(comment_text, "JXLS Migration Tool")
-                self.logger.debug(f"      添加注释到 {get_column_letter(col)}{row + 1}: {comment_text}")
+                self.logger.debug(f"      添加注释到 {get_column_letter(col + 1)}{actual_row}: {comment_text}")
             except Exception as e:
-                self.logger.debug(f"      添加注释失败 row={row + 1}, col={col}: {e}")
+                self.logger.debug(f"      添加注释失败 row={row + 1}, col={col + 1}: {e}")
 
         return result
 
     def process_commands_xlsx(self, commands: List[JxlsCommand], ws: Worksheet) -> Dict[str, Any]:
         """
-        处理XLSX格式的命令
+        处理XLSX格式的命令 - 修复版本
 
         Args:
             commands: JXLS命令列表
@@ -1585,7 +1662,10 @@ class JxlsMigrationTool:
         # 处理每个命令
         for cmd in commands:
             if isinstance(cmd, ForEachCommand):
+                self.logger.debug(f"      处理forEach命令: {cmd.raw_text}")
                 end_row = self.find_end_tag_xlsx(ws, cmd.location.row, '/jx:forEach')
+                self.logger.debug(f"      找到结束标签位置: {end_row}")
+
                 if end_row is not None:
                     cmd.end_location = CommandLocation(end_row, cmd.location.col, cmd.location.sheet_name)
                     cmd.data_location = CommandLocation(cmd.location.row + 1, cmd.location.col, cmd.location.sheet_name)
@@ -1595,7 +1675,8 @@ class JxlsMigrationTool:
 
                     # 计算lastCell
                     last_col = self.find_last_data_column_xlsx(ws, cmd.data_location.row)
-                    adjusted_data_row = cmd.data_location.row - len([r for r in rows_to_delete if r < cmd.data_location.row]) + 1
+                    adjusted_data_row = cmd.data_location.row - len(
+                        [r for r in rows_to_delete if r < cmd.data_location.row]) + 1
                     last_cell = f"{get_column_letter(last_col)}{adjusted_data_row}"
 
                     comment_text = cmd.to_jx_each(last_cell)
@@ -1607,6 +1688,7 @@ class JxlsMigrationTool:
                         'action': f'删除forEach标签行，添加注释: {comment_text}'
                     })
                     result['converted_commands'] += 1
+                    self.logger.info(f"      ✅ 转换forEach: {comment_text}")
 
             elif isinstance(cmd, IfCommand):
                 end_row = self.find_end_tag_xlsx(ws, cmd.location.row, '/jx:if')
@@ -1618,7 +1700,8 @@ class JxlsMigrationTool:
                     rows_to_delete.add(end_row)
 
                     last_col = self.find_last_data_column_xlsx(ws, cmd.data_location.row)
-                    adjusted_data_row = cmd.data_location.row - len([r for r in rows_to_delete if r < cmd.data_location.row]) + 1
+                    adjusted_data_row = cmd.data_location.row - len(
+                        [r for r in rows_to_delete if r < cmd.data_location.row]) + 1
                     last_cell = f"{get_column_letter(last_col)}{adjusted_data_row}"
 
                     comment_text = cmd.to_jx_if_v2(last_cell)
@@ -1633,12 +1716,19 @@ class JxlsMigrationTool:
 
             elif isinstance(cmd, AreaCommand):
                 area_commands.append(cmd)
+                # 现有的area命令 - 在原始位置添加注释
+                comment_text = cmd.to_jx_area_v2()
+                # 计算调整后的行号（考虑删除的行）
+                adjusted_row = cmd.location.row - len([r for r in rows_to_delete if r < cmd.location.row]) + 1
+                comments_to_add.append((adjusted_row, cmd.location.col + 1, comment_text))
+
                 result['changes'].append({
                     'type': 'area',
                     'row': cmd.location.row + 1,
-                    'action': f'保留area命令: {cmd.raw_text}'
+                    'action': f'保留area命令: {comment_text}'
                 })
                 result['converted_commands'] += 1
+                self.logger.info(f"      ✅ 保留area命令: {comment_text}")
 
             elif isinstance(cmd, MultiSheetCommand):
                 comment_text = cmd.to_jx_multi_sheet_v2()
@@ -1697,7 +1787,7 @@ class JxlsMigrationTool:
                         })
                         result['converted_commands'] += 1
 
-        # 自动生成area命令（如果没有现有的）
+        # 自动生成area命令（如果没有现有的）- 修复位置为A1
         if not area_commands and (rows_to_delete or comments_to_add):
             # 计算数据区域
             last_data_row = ws.max_row
@@ -1718,6 +1808,7 @@ class JxlsMigrationTool:
                     'action': f'自动添加area命令: {area_comment}'
                 })
                 result['converted_commands'] += 1
+                self.logger.info(f"      ✅ 自动生成area命令: {area_comment}")
 
         # 添加注释
         for row, col, comment_text in comments_to_add:
@@ -1866,7 +1957,8 @@ class JxlsMigrationTool:
                 report.append(f"### {idx}. `{source_name}` → `{target_name}`\n")
 
                 # 命令统计
-                report.append(f"- **命令统计**: 发现 {result.get('total_commands', 0)} 个，转换 {result.get('converted_commands', 0)} 个")
+                report.append(
+                    f"- **命令统计**: 发现 {result.get('total_commands', 0)} 个，转换 {result.get('converted_commands', 0)} 个")
 
                 # 列出变更类型
                 if result.get('changes'):
@@ -1954,11 +2046,11 @@ def print_banner():
     """打印工具横幅"""
     banner = """
 ╔═══════════════════════════════════════════════════════════════════╗
-║  JXLS 1.x → 2.14.0 自动化迁移工具（统一健壮版）                 ║
+║  JXLS 1.x → 2.14.0 自动化迁移工具（修复版 v3.4）                ║
 ║  Author: fivefish                                              ║
-║  Version: 3.3 (Unified Robust)                                  ║
+║  Version: 3.4 (Fixed)                                            ║
 ║  Date: 2025-11-07                                                 ║
-║  改进: 完整JXLS指令 + 智能格式识别 + 统一健壮API                 ║
+║  修复: jx:each注释生成 + jx:area位置问题                         ║
 ╚═══════════════════════════════════════════════════════════════════╝
 """
     print(banner)
@@ -1969,7 +2061,7 @@ def main():
     print_banner()
 
     parser = argparse.ArgumentParser(
-        description='JXLS 1.x到2.14.0自动化迁移工具（生产级完整版）',
+        description='JXLS 1.x到2.14.0自动化迁移工具（修复版 v3.4）',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 使用示例:
@@ -2037,7 +2129,8 @@ def main():
 
             if result['success']:
                 tool.logger.info(f"✅ 迁移成功: {args.output}")
-                tool.logger.info(f"🔧 发现 {result.get('total_commands', 0)} 个命令，转换 {result.get('converted_commands', 0)} 个")
+                tool.logger.info(
+                    f"🔧 发现 {result.get('total_commands', 0)} 个命令，转换 {result.get('converted_commands', 0)} 个")
                 sys.exit(0)
             else:
                 tool.logger.error(f"❌ 迁移失败: {result.get('error', '未知错误')}")
