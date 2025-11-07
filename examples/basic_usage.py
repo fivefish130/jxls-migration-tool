@@ -5,6 +5,13 @@ Basic Usage Example for JXLS Migration Tool
 
 This example demonstrates how to use the JXLS migration tool
 programmatically in your Python code.
+
+Version: 3.1 (Format Fix Update)
+Changes:
+  - Fixed 'Format' object has no attribute 'font_index' error
+  - Enhanced error handling for Excel format conversion
+  - Support for Excel files with incomplete format information
+  - Safe property access using hasattr() and getattr()
 """
 
 import os

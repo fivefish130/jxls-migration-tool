@@ -5,6 +5,13 @@ Batch Migration Example for JXLS Migration Tool
 
 This example demonstrates how to perform batch migrations
 with proper error handling and reporting.
+
+Version: 3.1 (Format Fix Update)
+Changes:
+  - Fixed 'Format' object has no attribute 'font_index' error
+  - Enhanced error handling for Excel format conversion
+  - Support for Excel files with incomplete format information
+  - Safe property access using hasattr() and getattr()
 """
 
 import os

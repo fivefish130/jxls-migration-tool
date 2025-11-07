@@ -2,46 +2,51 @@
 # -*- coding: utf-8 -*-
 
 """
-Windows Terminal 优化的 JXLS 迁移工具
-Windows Terminal 本身已经支持 UTF-8，不需要特殊处理
+完整的生产级 JXLS 迁移工具头
+自动检测和优化终端环境，支持各种现代开发环境
 """
 
 import sys
 import os
 
-# Windows Terminal 检测和优化
-if os.name == "nt":
-    # 检测是否在 Windows Terminal 中运行
-    wt_env_vars = ['WT_SESSION', 'WT_PROFILE_ID']
-    is_windows_terminal = any(var in os.environ for var in wt_env_vars)
+def setup_unicode_support():
+    """设置 Unicode 支持 - 生产环境优化"""
+    if os.name == "nt":
+        # 检测现代终端
+        modern_terminals = ['WT_SESSION', 'WT_PROFILE_ID', 'VSCODE_PID', 'TERM_PROGRAM']
+        is_modern_terminal = any(var in os.environ for var in modern_terminals)
 
-    if is_windows_terminal:
-        # Windows Terminal 已经原生支持 UTF-8，不需要特殊处理
-        print("🔍 检测到 Windows Terminal，使用原生 UTF-8 支持")
-    else:
-        # 传统 cmd 或 PowerShell，需要设置代码页
-        try:
+        if not is_modern_terminal:
+            # 传统终端需要设置代码页
             os.system("chcp 65001 >nul 2>&1")
-            # 设置标准流编码
+            print("🔧 已为传统终端启用 UTF-8 支持")
+        else:
+            print("🎯 现代终端检测，使用原生 UTF-8")
+
+        # 统一设置流编码
+        try:
             if hasattr(sys.stdout, 'reconfigure'):
                 sys.stdout.reconfigure(encoding='utf-8')
-            if hasattr(sys.stderr, 'reconfigure'):
                 sys.stderr.reconfigure(encoding='utf-8')
-            print("🔧 已设置传统终端 UTF-8 支持")
         except:
             pass
 
+# 初始化 Unicode 支持
+setup_unicode_support()
+
 """
-JXLS 1.x → 2.14.0 自动化迁移工具
+JXLS 1.x → 2.14.0 自动化迁移工具 (v3.1 - 格式修复版)
 
 功能特性:
   • 指令转换: forEach→each, if(test→condition), out→${}, area自动生成, multiSheet支持
-  • 格式保留: 样式、列宽、行高、合并单元格、背景色
+  • 格式保留: 样式、列宽、行高、合并单元格、背景色 (增强错误处理)
   • 智能识别: 基于文件头检测真实格式，不依赖后缀名
   • 终端优化: Windows Terminal自动UTF-8检测与配置
   • 报告生成: Markdown + JSON + DEBUG日志
+  • 格式修复: 修复 'Format' object has no attribute 'font_index' 错误
 
-版本: 3.0  |  作者: fivefish  |  日期: 2025-11-07
+版本: 3.1  |  作者: fivefish  |  日期: 2025-11-07
+更新: 增强Excel格式转换的错误处理，支持不完整格式信息
 使用: python jxls_migration_tool.py --help
 """
 
@@ -459,7 +464,7 @@ class ExcelFormatConverter:
     @staticmethod
     def convert_font(xls_font, xls_book) -> Font:
         """
-        转换字体格式
+        转换字体格式 - 增强错误处理
 
         Args:
             xls_font: xlrd的Font对象
@@ -469,29 +474,46 @@ class ExcelFormatConverter:
             openpyxl的Font对象
         """
         try:
-            font = Font(
-                name=xls_font.name if xls_font.name else 'Calibri',
-                size=xls_font.height / 20,  # xlrd的height单位是twips，需要除以20
-                bold=xls_font.bold,
-                italic=xls_font.italic,
-                underline='single' if xls_font.underline_type else None,
-                strike=xls_font.struck_out
-            )
+            font_args = {}
 
-            # 设置字体颜色
+            # 字体名称
+            if hasattr(xls_font, 'name') and xls_font.name:
+                font_args['name'] = xls_font.name
+            else:
+                font_args['name'] = 'Calibri'  # 默认字体
+
+            # 字体大小
+            if hasattr(xls_font, 'height') and xls_font.height:
+                font_args['size'] = xls_font.height / 20  # twips to points
+            else:
+                font_args['size'] = 11  # 默认大小
+
+            # 字体样式
+            if hasattr(xls_font, 'bold'):
+                font_args['bold'] = xls_font.bold
+            if hasattr(xls_font, 'italic'):
+                font_args['italic'] = xls_font.italic
+            if hasattr(xls_font, 'underline_type'):
+                font_args['underline'] = 'single' if xls_font.underline_type else None
+            if hasattr(xls_font, 'struck_out'):
+                font_args['strike'] = xls_font.struck_out
+
+            # 字体颜色
             if hasattr(xls_font, 'colour_index') and xls_font.colour_index:
                 color_rgb = ExcelFormatConverter.get_rgb_from_xls_color(xls_font.colour_index)
                 if color_rgb:
-                    font.color = color_rgb
+                    font_args['color'] = color_rgb
 
-            return font
-        except Exception:
-            return Font()
+            return Font(**font_args)
+
+        except Exception as e:
+            logging.debug(f"字体转换失败: {e}")
+            return Font(name='Calibri', size=11)  # 返回默认字体
 
     @staticmethod
     def convert_fill(xls_format, xls_book) -> Optional[PatternFill]:
         """
-        转换填充格式
+        转换填充格式 - 增强错误处理
 
         Args:
             xls_format: xlrd的Format对象
@@ -501,32 +523,46 @@ class ExcelFormatConverter:
             openpyxl的PatternFill对象或None
         """
         try:
-            if not hasattr(xls_format, 'pattern') or not hasattr(xls_format, 'background'):
+            # 检查必要的属性
+            if not hasattr(xls_format, 'background'):
                 return None
 
-            pattern = xls_format.pattern.pattern_type_str
-            if pattern and pattern != 'No Pattern':
-                bg_color = ExcelFormatConverter.get_rgb_from_xls_color(
-                    xls_format.background.background_colour_index
-                )
-                fg_color = ExcelFormatConverter.get_rgb_from_xls_color(
-                    xls_format.background.pattern_colour_index
+            background = xls_format.background
+
+            # 获取背景色和前景色
+            bg_color_index = getattr(background, 'background_colour_index', None)
+            fg_color_index = getattr(background, 'pattern_colour_index', None)
+
+            # 获取填充模式
+            pattern = getattr(background, 'fill_pattern', None)
+            if hasattr(background, 'pattern'):
+                pattern = getattr(background.pattern, 'pattern_type_str', None)
+
+            bg_color = ExcelFormatConverter.get_rgb_from_xls_color(bg_color_index)
+            fg_color = ExcelFormatConverter.get_rgb_from_xls_color(fg_color_index)
+
+            # 如果有颜色信息，创建填充
+            if bg_color or fg_color:
+                fill_type = 'solid'
+                if pattern and pattern != 'Solid':
+                    # 映射其他填充模式
+                    fill_type = 'darkGray' if 'Gray' in pattern else 'solid'
+
+                return PatternFill(
+                    start_color=fg_color or 'FFFFFF',
+                    end_color=bg_color or 'FFFFFF',
+                    fill_type=fill_type
                 )
 
-                if bg_color or fg_color:
-                    return PatternFill(
-                        start_color=fg_color or 'FFFFFF',
-                        end_color=bg_color or 'FFFFFF',
-                        fill_type='solid' if pattern == 'Solid' else None
-                    )
-        except Exception:
-            pass
+        except Exception as e:
+            logging.debug(f"填充转换失败: {e}")
+
         return None
 
     @staticmethod
     def convert_border(xls_format) -> Border:
         """
-        转换边框格式
+        转换边框格式 - 增强错误处理
 
         Args:
             xls_format: xlrd的Format对象
@@ -552,19 +588,30 @@ class ExcelFormatConverter:
 
             xls_border = xls_format.border
 
-            left = Side(style=border_style_map.get(xls_border.left_line_style)) if hasattr(xls_border, 'left_line_style') else None
-            right = Side(style=border_style_map.get(xls_border.right_line_style)) if hasattr(xls_border, 'right_line_style') else None
-            top = Side(style=border_style_map.get(xls_border.top_line_style)) if hasattr(xls_border, 'top_line_style') else None
-            bottom = Side(style=border_style_map.get(xls_border.bottom_line_style)) if hasattr(xls_border, 'bottom_line_style') else None
+            # 安全地获取边框样式
+            def get_side(line_style_attr):
+                if hasattr(xls_border, line_style_attr):
+                    line_style = getattr(xls_border, line_style_attr)
+                    style = border_style_map.get(line_style)
+                    if style:
+                        return Side(style=style)
+                return None
+
+            left = get_side('left_line_style')
+            right = get_side('right_line_style')
+            top = get_side('top_line_style')
+            bottom = get_side('bottom_line_style')
 
             return Border(left=left, right=right, top=top, bottom=bottom)
-        except Exception:
+
+        except Exception as e:
+            logging.debug(f"边框转换失败: {e}")
             return Border()
 
     @staticmethod
     def convert_alignment(xls_format) -> Alignment:
         """
-        转换对齐方式
+        转换对齐方式 - 增强错误处理
 
         Args:
             xls_format: xlrd的Format对象
@@ -598,13 +645,73 @@ class ExcelFormatConverter:
 
             xls_align = xls_format.alignment
 
-            return Alignment(
-                horizontal=horizontal_map.get(xls_align.hor_align, 'general'),
-                vertical=vertical_map.get(xls_align.vert_align, 'bottom'),
-                wrap_text=bool(xls_align.text_wrapped) if hasattr(xls_align, 'text_wrapped') else False
-            )
-        except Exception:
+            alignment_args = {}
+
+            # 水平对齐
+            if hasattr(xls_align, 'hor_align'):
+                alignment_args['horizontal'] = horizontal_map.get(xls_align.hor_align, 'general')
+
+            # 垂直对齐
+            if hasattr(xls_align, 'vert_align'):
+                alignment_args['vertical'] = vertical_map.get(xls_align.vert_align, 'bottom')
+
+            # 自动换行
+            if hasattr(xls_align, 'text_wrapped'):
+                alignment_args['wrap_text'] = bool(xls_align.text_wrapped)
+
+            return Alignment(**alignment_args)
+
+        except Exception as e:
+            logging.debug(f"对齐转换失败: {e}")
             return Alignment()
+
+    @staticmethod
+    def copy_cell_format(xls_cell, xls_book, xlsx_cell):
+        """
+        安全地复制单元格格式
+
+        Args:
+            xls_cell: xlrd单元格对象
+            xls_book: xlrd工作簿对象
+            xlsx_cell: openpyxl单元格对象
+        """
+        try:
+            # 获取格式索引
+            if not hasattr(xls_cell, 'xf_index'):
+                return
+
+            xf_index = xls_cell.xf_index
+
+            # 获取格式对象
+            if not hasattr(xls_book, 'xf_list') or xf_index >= len(xls_book.xf_list):
+                return
+
+            xls_format = xls_book.xf_list[xf_index]
+
+            # 获取字体索引
+            font_index = getattr(xls_format, 'font_index', None)
+            if font_index is not None and hasattr(xls_book, 'font_list'):
+                if font_index < len(xls_book.font_list):
+                    xls_font = xls_book.font_list[font_index]
+                    xlsx_cell.font = ExcelFormatConverter.convert_font(xls_font, xls_book)
+
+            # 填充
+            fill = ExcelFormatConverter.convert_fill(xls_format, xls_book)
+            if fill:
+                xlsx_cell.fill = fill
+
+            # 边框
+            border = ExcelFormatConverter.convert_border(xls_format)
+            if border and any([border.left, border.right, border.top, border.bottom]):
+                xlsx_cell.border = border
+
+            # 对齐
+            alignment = ExcelFormatConverter.convert_alignment(xls_format)
+            xlsx_cell.alignment = alignment
+
+        except Exception as e:
+            # 记录详细错误信息用于调试
+            logging.debug(f"复制单元格格式失败 (row={getattr(xls_cell, 'row', 'N/A')}, col={getattr(xls_cell, 'col', 'N/A')}): {e}")
 
 
 # ============================================================================
@@ -1300,26 +1407,8 @@ class JxlsMigrationTool:
 
                 xlsx_cell.value = cell_value
 
-                # 复制格式
-                try:
-                    xls_format = xls_book.format_map.get(xls_cell.xf_index)
-                    if xls_format:
-                        # 字体
-                        xls_font = xls_book.font_list[xls_format.font_index]
-                        xlsx_cell.font = ExcelFormatConverter.convert_font(xls_font, xls_book)
-
-                        # 填充
-                        fill = ExcelFormatConverter.convert_fill(xls_format, xls_book)
-                        if fill:
-                            xlsx_cell.fill = fill
-
-                        # 边框
-                        xlsx_cell.border = ExcelFormatConverter.convert_border(xls_format)
-
-                        # 对齐
-                        xlsx_cell.alignment = ExcelFormatConverter.convert_alignment(xls_format)
-                except Exception as e:
-                    self.logger.debug(f"      复制格式失败 row={row_idx + 1}, col={col_idx + 1}: {e}")
+                # 复制格式 - 使用安全的复制方法
+                ExcelFormatConverter.copy_cell_format(xls_cell, xls_book, xlsx_cell)
 
             new_row += 1
 
@@ -1795,9 +1884,9 @@ def print_banner():
 ╔═══════════════════════════════════════════════════════════════════╗
 ║  JXLS 1.x → 2.14.0 自动化迁移工具（生产级完整版）                ║
 ║  Author: fivefish                                              ║
-║  Version: 3.0                                                     ║
-║  Date: 2025-11-06                                                 ║
-║  改进: 完整JXLS指令支持 + 智能格式识别 + 自动area生成            ║
+║  Version: 3.1 (Format Fix)                                       ║
+║  Date: 2025-11-07                                                 ║
+║  改进: 完整JXLS指令支持 + 智能格式识别 + 格式错误修复            ║
 ╚═══════════════════════════════════════════════════════════════════╝
 """
     print(banner)
