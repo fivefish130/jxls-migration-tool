@@ -249,4 +249,4 @@ For issues, questions, or contributions:
 
 **Version**: 3.1.0  
 **Last Updated**: 2025-11-07  
-**Maintainer**: Claude Code
+**Maintainer**: fivefish

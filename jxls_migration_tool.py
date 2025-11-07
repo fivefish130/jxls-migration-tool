@@ -41,7 +41,7 @@ JXLS 1.x → 2.14.0 自动化迁移工具
   • 终端优化: Windows Terminal自动UTF-8检测与配置
   • 报告生成: Markdown + JSON + DEBUG日志
 
-版本: 3.0  |  作者: Claude Code  |  日期: 2025-11-07
+版本: 3.0  |  作者: fivefish  |  日期: 2025-11-07
 使用: python jxls_migration_tool.py --help
 """
 
@@ -1794,7 +1794,7 @@ def print_banner():
     banner = """
 ╔═══════════════════════════════════════════════════════════════════╗
 ║  JXLS 1.x → 2.14.0 自动化迁移工具（生产级完整版）                ║
-║  Author: Claude Code                                              ║
+║  Author: fivefish                                              ║
 ║  Version: 3.0                                                     ║
 ║  Date: 2025-11-06                                                 ║
 ║  改进: 完整JXLS指令支持 + 智能格式识别 + 自动area生成            ║

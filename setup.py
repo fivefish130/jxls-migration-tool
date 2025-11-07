@@ -29,7 +29,7 @@ def get_version():
 setup(
     name="jxls-migration-tool",
     version=get_version(),
-    author="Claude Code",
+    author="fivefish",
     author_email="claude@anthropic.com",
     description="Production-ready tool for automated migration from JXLS 1.x to JXLS 2.14.0",
     long_description=read_readme(),

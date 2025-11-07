@@ -239,7 +239,7 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ## 👨‍💻 Author
 
-**Claude Code**
+**fivefish**
 - Version: 3.0
 - Date: 2025-11-07
 
