@@ -35,7 +35,7 @@ def setup_unicode_support():
 setup_unicode_support()
 
 """
-JXLS 1.x → 2.14.0 自动化迁移工具 (v3.1 - 格式修复版)
+JXLS 1.x → 2.14.0 自动化迁移工具 (v3.2 - 健壮版)
 
 功能特性:
   • 指令转换: forEach→each, if(test→condition), out→${}, area自动生成, multiSheet支持
@@ -43,10 +43,11 @@ JXLS 1.x → 2.14.0 自动化迁移工具 (v3.1 - 格式修复版)
   • 智能识别: 基于文件头检测真实格式，不依赖后缀名
   • 终端优化: Windows Terminal自动UTF-8检测与配置
   • 报告生成: Markdown + JSON + DEBUG日志
-  • 格式修复: 修复 'Format' object has no attribute 'font_index' 错误
+  • 健壮迁移: 自动格式检测 + 双重处理器回退机制
+  • 错误修复: 修复 'Format' object has no attribute 'font_index' 错误
 
-版本: 3.1  |  作者: fivefish  |  日期: 2025-11-07
-更新: 增强Excel格式转换的错误处理，支持不完整格式信息
+版本: 3.2  |  作者: fivefish  |  日期: 2025-11-07
+更新: 新增 robust_migrate_file 方法，支持自动格式检测和回退
 使用: python jxls_migration_tool.py --help
 """
 
@@ -173,6 +174,46 @@ def detect_excel_format(file_path: str) -> Optional[str]:
     except Exception as e:
         logging.debug(f"文件格式检测失败 {file_path}: {e}")
         return None
+
+
+def safe_detect_excel_format(file_path: str, logger: Optional[logging.Logger] = None) -> str:
+    """
+    安全地检测Excel文件格式，带有详细的日志记录
+
+    Args:
+        file_path: 文件路径
+        logger: 日志记录器
+
+    Returns:
+        str: 'xls' 或 'xlsx'
+    """
+    try:
+        format_result = detect_excel_format(file_path)
+
+        if format_result:
+            if logger:
+                logger.debug(f"  格式检测结果: {format_result}")
+            return format_result
+
+        # 如果检测失败，尝试通过文件扩展名判断
+        file_ext = Path(file_path).suffix.lower()
+        if logger:
+            logger.debug(f"  自动检测失败，使用扩展名判断: {file_ext}")
+
+        if file_ext == '.xlsx':
+            return 'xlsx'
+        elif file_ext == '.xls':
+            return 'xls'
+        else:
+            # 默认返回 xls
+            if logger:
+                logger.warning(f"  无法判断格式，默认使用 XLS 处理器")
+            return 'xls'
+    except Exception as e:
+        if logger:
+            logger.error(f"  格式检测出错: {e}")
+        # 出错时默认返回 xls
+        return 'xls'
 
 
 # ============================================================================
@@ -845,8 +886,13 @@ class JxlsMigrationTool:
                 output_file.parent.mkdir(parents=True, exist_ok=True)
 
             try:
-                result = self.migrate_file(str(excel_file), str(output_file))
+                # 使用健壮的迁移方法，支持自动回退
+                result = self.robust_migrate_file(str(excel_file), str(output_file))
                 self.results.append(result)
+
+                # 显示尝试记录（如果有）
+                if 'attempts' in result and len(result['attempts']) > 1:
+                    self.logger.debug(f"  尝试记录: {result['attempts']}")
 
                 if result['success']:
                     self.stats['success'] += 1
@@ -942,6 +988,68 @@ class JxlsMigrationTool:
                     os.remove(temp_file)
                 except:
                     pass
+
+        return result
+
+    def robust_migrate_file(self, input_path: str, output_path: str) -> Dict[str, Any]:
+        """
+        健壮的文件迁移方法，自动处理格式识别问题
+
+        该方法会尝试根据检测到的格式选择处理器，如果失败则自动回退到另一种处理器
+        确保即使文件格式检测错误也能成功迁移
+
+        Args:
+            input_path: 输入的Excel文件路径
+            output_path: 输出的Excel文件路径
+
+        Returns:
+            迁移结果字典，包含详细的尝试记录
+        """
+        result = {
+            'source': input_path,
+            'target': output_path,
+            'success': False,
+            'sheets': [],
+            'changes': [],
+            'total_commands': 0,
+            'converted_commands': 0,
+            'error': None,
+            'attempts': []
+        }
+
+        # 第一次尝试：根据检测的格式处理
+        detected_format = safe_detect_excel_format(input_path, self.logger)
+        result['attempts'].append(f"第一次尝试: 检测格式为 {detected_format}")
+        self.logger.info(f"  第一次尝试: 使用 {detected_format.upper()} 处理器")
+
+        try:
+            if detected_format == 'xlsx':
+                self.logger.debug(f"  调用 migrate_xlsx_file")
+                result.update(self.migrate_xlsx_file(input_path, output_path))
+            else:
+                self.logger.debug(f"  调用 migrate_xls_file")
+                result.update(self.migrate_xls_file(input_path, output_path))
+        except Exception as e:
+            result['attempts'].append(f"第一次尝试失败: {type(e).__name__}: {e}")
+            self.logger.warning(f"  第一次尝试失败: {e}")
+
+            # 第二次尝试：强制使用另一种格式处理器
+            self.logger.info(f"  🔄 第一次尝试失败，尝试备用处理器")
+            try:
+                if detected_format == 'xlsx':
+                    result['attempts'].append("第二次尝试: 使用XLS处理器")
+                    self.logger.info(f"  第二次尝试: 强制使用 XLS 处理器")
+                    result.update(self.migrate_xls_file(input_path, output_path))
+                else:
+                    result['attempts'].append("第二次尝试: 使用XLSX处理器")
+                    self.logger.info(f"  第二次尝试: 强制使用 XLSX 处理器")
+                    result.update(self.migrate_xlsx_file(input_path, output_path))
+            except Exception as fallback_error:
+                result['attempts'].append(f"第二次尝试失败: {type(fallback_error).__name__}: {fallback_error}")
+                result['error'] = f"所有尝试都失败: 主错误={type(e).__name__}, 备用错误={type(fallback_error).__name__}"
+                self.logger.error(f"  ❌ 所有迁移尝试都失败")
+                self.logger.error(f"     主错误: {e}")
+                self.logger.error(f"     备用错误: {fallback_error}")
 
         return result
 
@@ -1882,11 +1990,11 @@ def print_banner():
     """打印工具横幅"""
     banner = """
 ╔═══════════════════════════════════════════════════════════════════╗
-║  JXLS 1.x → 2.14.0 自动化迁移工具（生产级完整版）                ║
+║  JXLS 1.x → 2.14.0 自动化迁移工具（健壮版）                     ║
 ║  Author: fivefish                                              ║
-║  Version: 3.1 (Format Fix)                                       ║
+║  Version: 3.2 (Robust Migration)                                ║
 ║  Date: 2025-11-07                                                 ║
-║  改进: 完整JXLS指令支持 + 智能格式识别 + 格式错误修复            ║
+║  改进: 完整JXLS指令 + 智能格式识别 + 健壮迁移机制                ║
 ╚═══════════════════════════════════════════════════════════════════╝
 """
     print(banner)
