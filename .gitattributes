@@ -1,0 +1,27 @@
+# Ensure Python files are always checked out with LF line endings
+*.py text eol=lf
+
+# Markdown files should have LF endings
+*.md text eol=lf
+
+# Text files should have LF endings
+*.txt text eol=lf
+
+# Shell scripts should have LF endings
+*.sh text eol=lf
+
+# Excel files should have binary line endings
+*.xls binary
+*.xlsx binary
+
+# Image files should have binary line endings
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+
+# Archive files should have binary line endings
+*.zip binary
+*.tar binary
+*.gz binary
