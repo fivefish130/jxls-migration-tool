@@ -69,9 +69,9 @@ python jxls_migration_tool.py input.xls -f output.xlsx
 - 🎯 Success rate: **100%**
 
 **Module Distribution**:
-- ftrade-bj-task: 7 templates
-- ftrade-task: 1 template
-- ftrade-web: 42 templates
+- Module A: 7 templates
+- Module B: 1 template
+- Module C: 42 templates
 
 **Command Statistics**:
 - Total JXLS commands found: 106

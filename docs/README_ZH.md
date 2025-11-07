@@ -71,9 +71,9 @@ python jxls_migration_tool.py input.xls -f output.xls --keep-extension
 - 🎯 成功率: **100%**
 
 **模块分布**:
-- ftrade-bj-task: 7 个模板
-- ftrade-task: 1 个模板
-- ftrade-web: 42 个模板
+- Module A: 7 个模板
+- Module B: 1 个模板
+- Module C: 42 个模板
 
 **指令统计**:
 - 发现 JXLS 指令总数: 106

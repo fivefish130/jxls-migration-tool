@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🎉 Initial Release as Independent Tool
 
-This release marks the first standalone version of the JXLS Migration Tool, extracted from the ftrade project and made available as a general-purpose utility.
+This release marks the first standalone version of the JXLS Migration Tool, extracted from an enterprise project and made available as a general-purpose utility.
 
 #### ✨ Added
 - Complete standalone tool structure
@@ -23,7 +23,7 @@ This release marks the first standalone version of the JXLS Migration Tool, extr
 #### 🔄 Changed
 - **BREAKING**: Simplified docstring (from 86 lines to 23 lines) for better maintainability
 - Updated to 3.1.0 version (increment from 3.0 for standalone release)
-- Made tool fully generic (removed ftrade-specific hardcoding)
+- Made tool fully generic (removed project-specific hardcoding)
 - Enhanced documentation with English translations
 - Improved code organization and structure
 
@@ -111,7 +111,7 @@ Major overhaul to make the tool production-ready with full JXLS 2.14.0 support.
   - Faster processing
   - Reduced overhead
 
-#### 📊 Migration Statistics (ftrade project)
+#### 📊 Migration Statistics (enterprise project)
 - **Total files scanned**: 923 Excel files
 - **Successfully migrated**: 50 JXLS templates
 - **Skipped**: 873 files (no JXLS instructions or import-only templates)
@@ -128,9 +128,9 @@ Major overhaul to make the tool production-ready with full JXLS 2.14.0 support.
 - **Supported JXLS instructions**: 5 types
 
 #### 🏷️ Module Distribution
-- ftrade-bj-task: 7 templates
-- ftrade-task: 1 template
-- ftrade-web: 42 templates
+- Module A: 7 templates
+- Module B: 1 template
+- Module C: 42 templates
 
 ---
 
