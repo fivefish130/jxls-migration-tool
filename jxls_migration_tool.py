@@ -35,7 +35,7 @@ def setup_unicode_support():
 setup_unicode_support()
 
 """
-JXLS 1.x → 2.14.0 自动化迁移工具 (v3.2 - 健壮版)
+JXLS 1.x → 2.14.0 自动化迁移工具 (v3.3 - 统一健壮版)
 
 功能特性:
   • 指令转换: forEach→each, if(test→condition), out→${}, area自动生成, multiSheet支持
@@ -43,11 +43,11 @@ JXLS 1.x → 2.14.0 自动化迁移工具 (v3.2 - 健壮版)
   • 智能识别: 基于文件头检测真实格式，不依赖后缀名
   • 终端优化: Windows Terminal自动UTF-8检测与配置
   • 报告生成: Markdown + JSON + DEBUG日志
-  • 健壮迁移: 自动格式检测 + 双重处理器回退机制
+  • 健壮迁移: 自动格式检测 + 双重处理器回退机制 (统一API)
   • 错误修复: 修复 'Format' object has no attribute 'font_index' 错误
 
-版本: 3.2  |  作者: fivefish  |  日期: 2025-11-07
-更新: 新增 robust_migrate_file 方法，支持自动格式检测和回退
+版本: 3.3  |  作者: fivefish  |  日期: 2025-11-07
+更新: 将 robust_migrate_file 提升为标准 migrate_file，简化API
 使用: python jxls_migration_tool.py --help
 """
 
@@ -941,57 +941,6 @@ class JxlsMigrationTool:
         }
 
     def migrate_file(self, input_path: str, output_path: str) -> Dict[str, Any]:
-        """
-        迁移单个Excel文件
-
-        Args:
-            input_path: 输入的Excel文件路径
-            output_path: 输出的Excel文件路径
-
-        Returns:
-            迁移结果字典
-        """
-        result = {
-            'source': input_path,
-            'target': output_path,
-            'success': False,
-            'sheets': [],
-            'changes': [],
-            'total_commands': 0,
-            'converted_commands': 0,
-            'error': None
-        }
-
-        temp_file = None
-        try:
-            # 检测文件格式
-            actual_format = detect_excel_format(input_path)
-            input_path_obj = Path(input_path)
-            file_ext = input_path_obj.suffix.lower()
-
-            # 根据实际格式选择处理器
-            if actual_format == 'xlsx' or (actual_format is None and file_ext == '.xlsx'):
-                self.logger.debug(f"使用XLSX处理器处理: {input_path}")
-                return self.migrate_xlsx_file(input_path, output_path)
-            else:
-                self.logger.debug(f"使用XLS处理器处理: {input_path}")
-                return self.migrate_xls_file(input_path, output_path)
-
-        except Exception as e:
-            result['error'] = f"{type(e).__name__}: {str(e)}"
-            self.logger.error(f"  迁移失败: {result['error']}")
-            self.logger.debug(traceback.format_exc())
-        finally:
-            # 清理临时文件
-            if temp_file and os.path.exists(temp_file):
-                try:
-                    os.remove(temp_file)
-                except:
-                    pass
-
-        return result
-
-    def robust_migrate_file(self, input_path: str, output_path: str) -> Dict[str, Any]:
         """
         健壮的文件迁移方法，自动处理格式识别问题
 
@@ -1990,11 +1939,11 @@ def print_banner():
     """打印工具横幅"""
     banner = """
 ╔═══════════════════════════════════════════════════════════════════╗
-║  JXLS 1.x → 2.14.0 自动化迁移工具（健壮版）                     ║
+║  JXLS 1.x → 2.14.0 自动化迁移工具（统一健壮版）                 ║
 ║  Author: fivefish                                              ║
-║  Version: 3.2 (Robust Migration)                                ║
+║  Version: 3.3 (Unified Robust)                                  ║
 ║  Date: 2025-11-07                                                 ║
-║  改进: 完整JXLS指令 + 智能格式识别 + 健壮迁移机制                ║
+║  改进: 完整JXLS指令 + 智能格式识别 + 统一健壮API                 ║
 ╚═══════════════════════════════════════════════════════════════════╝
 """
     print(banner)
@@ -2064,7 +2013,12 @@ def main():
             # 设置日志
             tool.logger = setup_logging(None, args.dry_run, args.verbose)
 
-            result = tool.migrate_file(args.input, args.output)
+            # 使用健壮的迁移方法，支持自动回退
+            result = tool.robust_migrate_file(args.input, args.output)
+
+            # 显示尝试记录（如果有回退）
+            if 'attempts' in result and len(result['attempts']) > 1:
+                tool.logger.debug(f"尝试记录: {result['attempts']}")
 
             if result['success']:
                 tool.logger.info(f"✅ 迁移成功: {args.output}")
@@ -2072,6 +2026,8 @@ def main():
                 sys.exit(0)
             else:
                 tool.logger.error(f"❌ 迁移失败: {result.get('error', '未知错误')}")
+                if 'attempts' in result:
+                    tool.logger.debug(f"完整尝试记录: {result['attempts']}")
                 sys.exit(1)
         else:
             # 迁移目录
