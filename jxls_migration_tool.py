@@ -1382,17 +1382,7 @@ class JxlsMigrationTool:
                                           xlsx_sheet: Worksheet,
                                           format_type: str) -> Dict[str, Any]:
         """
-        处理命令并迁移数据（用于XLS格式） - 修复版本
-
-        Args:
-            commands: JXLS命令列表
-            xls_sheet: xlrd的Sheet对象
-            xls_book: xlrd的Workbook对象
-            xlsx_sheet: openpyxl的Worksheet对象
-            format_type: 格式类型 ('xls' 或 'xlsx')
-
-        Returns:
-            处理结果字典
+        处理命令并迁移数据（用于XLS格式） - 完整修复版本
         """
         result = {
             'changes': [],
@@ -1436,12 +1426,18 @@ class JxlsMigrationTool:
                     self.logger.debug(f"      调整后数据行: {adjusted_data_row}, lastCell: {last_cell}")
 
                     comment_text = cmd.to_jx_each(last_cell)
-                    comments_to_add.append((adjusted_data_row, 1, comment_text))
+
+                    # 修复：找到数据行的第一个有数据的列
+                    first_data_col = self.find_first_data_column(xls_sheet, cmd.data_location.row)
+                    if first_data_col == -1:  # 如果没有找到有数据的列，使用命令所在的列
+                        first_data_col = cmd.location.col
+
+                    comments_to_add.append((adjusted_data_row, first_data_col, comment_text))
 
                     result['changes'].append({
                         'type': 'forEach',
                         'row': cmd.location.row + 1,
-                        'action': f'删除forEach标签行，添加注释: {comment_text}'
+                        'action': f'删除forEach标签行，添加注释: {comment_text} (位置: {get_column_letter(first_data_col + 1)}{adjusted_data_row + 1})'
                     })
                     result['converted_commands'] += 1
 
@@ -1465,12 +1461,18 @@ class JxlsMigrationTool:
                     last_cell = f"{get_column_letter(last_col + 1)}{adjusted_data_row + 1}"
 
                     comment_text = cmd.to_jx_if_v2(last_cell)
-                    comments_to_add.append((adjusted_data_row, 1, comment_text))
+
+                    # 修复：找到数据行的第一个有数据的列
+                    first_data_col = self.find_first_data_column(xls_sheet, cmd.data_location.row)
+                    if first_data_col == -1:  # 如果没有找到有数据的列，使用命令所在的列
+                        first_data_col = cmd.location.col
+
+                    comments_to_add.append((adjusted_data_row, first_data_col, comment_text))
 
                     result['changes'].append({
                         'type': 'if',
                         'row': cmd.location.row + 1,
-                        'action': f'删除if标签行，添加注释: {comment_text}'
+                        'action': f'删除if标签行，添加注释: {comment_text} (位置: {get_column_letter(first_data_col + 1)}{adjusted_data_row + 1})'
                     })
                     result['converted_commands'] += 1
 
@@ -1630,7 +1632,7 @@ class JxlsMigrationTool:
                     actual_row = 1
                     self.logger.debug(f"      在A1添加area注释: {comment_text}")
 
-                cell = xlsx_sheet.cell(row=actual_row, column=col + 1)
+                cell = xlsx_sheet.cell(row=actual_row, column=col + 1)  # col+1 因为openpyxl列从1开始
                 cell.comment = Comment(comment_text, "JXLS Migration Tool")
                 self.logger.debug(f"      添加注释到 {get_column_letter(col + 1)}{actual_row}: {comment_text}")
             except Exception as e:
@@ -1640,14 +1642,7 @@ class JxlsMigrationTool:
 
     def process_commands_xlsx(self, commands: List[JxlsCommand], ws: Worksheet) -> Dict[str, Any]:
         """
-        处理XLSX格式的命令 - 修复版本
-
-        Args:
-            commands: JXLS命令列表
-            ws: openpyxl的Worksheet对象
-
-        Returns:
-            处理结果字典
+        处理XLSX格式的命令 - 完整修复版本
         """
         result = {
             'changes': [],
@@ -1680,12 +1675,15 @@ class JxlsMigrationTool:
                     last_cell = f"{get_column_letter(last_col)}{adjusted_data_row}"
 
                     comment_text = cmd.to_jx_each(last_cell)
-                    comments_to_add.append((adjusted_data_row, 1, comment_text))
+
+                    # 修复：找到数据行的第一个有数据的列
+                    first_data_col = self.find_first_data_column_xlsx(ws, cmd.data_location.row)
+                    comments_to_add.append((adjusted_data_row, first_data_col, comment_text))
 
                     result['changes'].append({
                         'type': 'forEach',
                         'row': cmd.location.row + 1,
-                        'action': f'删除forEach标签行，添加注释: {comment_text}'
+                        'action': f'删除forEach标签行，添加注释: {comment_text} (位置: {get_column_letter(first_data_col)}{adjusted_data_row})'
                     })
                     result['converted_commands'] += 1
                     self.logger.info(f"      ✅ 转换forEach: {comment_text}")
@@ -1705,12 +1703,15 @@ class JxlsMigrationTool:
                     last_cell = f"{get_column_letter(last_col)}{adjusted_data_row}"
 
                     comment_text = cmd.to_jx_if_v2(last_cell)
-                    comments_to_add.append((adjusted_data_row, 1, comment_text))
+
+                    # 修复：找到数据行的第一个有数据的列
+                    first_data_col = self.find_first_data_column_xlsx(ws, cmd.data_location.row)
+                    comments_to_add.append((adjusted_data_row, first_data_col, comment_text))
 
                     result['changes'].append({
                         'type': 'if',
                         'row': cmd.location.row + 1,
-                        'action': f'删除if标签行，添加注释: {comment_text}'
+                        'action': f'删除if标签行，添加注释: {comment_text} (位置: {get_column_letter(first_data_col)}{adjusted_data_row})'
                     })
                     result['converted_commands'] += 1
 
@@ -1820,6 +1821,40 @@ class JxlsMigrationTool:
                 self.logger.debug(f"      添加注释失败 row={row}, col={col}: {e}")
 
         return result
+
+    def find_first_data_column(self, xls_sheet, row_idx: int) -> int:
+        """
+        在XLS中查找指定行第一个有数据的列
+
+        Args:
+            xls_sheet: xlrd的Sheet对象
+            row_idx: 行号
+
+        Returns:
+            第一个有数据的列索引，如果没有找到返回-1
+        """
+        for col_idx in range(xls_sheet.ncols):
+            cell = xls_sheet.cell(row_idx, col_idx)
+            if cell.value and str(cell.value).strip():
+                return col_idx
+        return -1
+
+    def find_first_data_column_xlsx(self, ws: Worksheet, row_idx: int) -> int:
+        """
+        在XLSX中查找指定行第一个有数据的列
+
+        Args:
+            ws: openpyxl的Worksheet对象
+            row_idx: 行号
+
+        Returns:
+            第一个有数据的列号（1-based），如果没有找到返回1
+        """
+        row_data = list(ws.iter_rows())[row_idx]
+        for col_idx, cell in enumerate(row_data, start=1):
+            if cell.value and str(cell.value).strip():
+                return col_idx
+        return 1  # 默认返回A列
 
     def find_end_tag(self, xls_sheet, start_row: int, end_tag: str) -> Optional[int]:
         """
