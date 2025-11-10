@@ -190,6 +190,7 @@ def safe_detect_excel_format(file_path: str, logger: Optional[logging.Logger] = 
     Returns:
         str: 'xls' 或 'xlsx'
     """
+    from pathlib import Path
     try:
         format_result = detect_excel_format(file_path)
         file_ext = Path(file_path).suffix.lower()
@@ -1055,6 +1056,10 @@ class JxlsMigrationTool:
         Returns:
             迁移结果字典
         """
+        from pathlib import Path
+        import os
+        import shutil
+
         result = {
             'source': xls_path,
             'target': xlsx_path,
@@ -1095,7 +1100,6 @@ class JxlsMigrationTool:
             # 保存文件
             if not self.dry_run:
                 # 始终保存为.xlsx格式，然后重命名
-                from pathlib import Path
                 output_path_obj = Path(xlsx_path)
                 actual_xlsx_path = str(output_path_obj.with_suffix('.xlsx'))
 
@@ -1135,6 +1139,11 @@ class JxlsMigrationTool:
         Returns:
             迁移结果字典
         """
+        from pathlib import Path
+        import tempfile
+        import os
+        import shutil
+
         result = {
             'source': xlsx_path,
             'target': output_path,
@@ -1182,7 +1191,6 @@ class JxlsMigrationTool:
             # 保存文件
             if not self.dry_run:
                 # 始终保存为.xlsx格式，然后重命名
-                from pathlib import Path
                 output_path_obj = Path(output_path)
                 actual_xlsx_path = str(output_path_obj.with_suffix('.xlsx'))
 
