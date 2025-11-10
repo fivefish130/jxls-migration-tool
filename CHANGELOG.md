@@ -1,256 +1,209 @@
-# 更新日志
+# Changelog
 
-本文件记录 JXLS 迁移工具的所有重要更改。
+All notable changes to the JXLS Migration Tool project will be documented in this file.
 
-格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
-项目版本遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
 ## [3.4.2] - 2025-11-11
 
-### 修复
-- **修复 keep-extension 参数行为**
-  - 问题：.xls文件迁移后保持.xls后缀，但Jxls 2.14.0要求.xlsx格式文件
-  - 解决：.xls文件迁移后保持.xls文件名，但文件内容转换为.xlsx格式
-  - 这样既保持文件名不变（避免后端代码修改），又确保Jxls 2.14.0可正常读取
-  - 目录迁移：.xls → .xls文件名（.xlsx内容），.xlsx → .xlsx文件名（.xlsx内容）
+### Fixed
+- **Fixed keep-extension parameter behavior**
+  - Issue: .xls files kept .xls extension after migration, but Jxls 2.14.0 requires .xlsx format files
+  - Solution: .xls files now keep .xls filename but file content is converted to .xlsx format
+  - This preserves file names (avoiding backend code changes) while ensuring Jxls 2.14.0 compatibility
+  - Directory migration: .xls → .xls filename (.xlsx content), .xlsx → .xlsx filename (.xlsx content)
 
-- **修复富文本格式导致的兼容性问题**
-  - 问题：迁移后文件包含富文本格式，导致Jxls 2.14.0读取失败
-  - 解决：简化格式复制逻辑
-    - 不再复制字体名称和大小（避免中文字体兼容性问题）
-    - 使用标准Calibri字体替代
-    - 仅复制粗体/斜体等基本样式
-    - 仅复制纯色填充和边框
-  - 效果：避免富文本兼容性问题，确保Jxls 2.14.0可正常读取
+- **Fixed rich text format compatibility issues**
+  - Issue: Migrated files contained rich text formats, causing Jxls 2.14.0 to fail reading
+  - Solution: Simplified format copying logic
+    - No longer copies font names and sizes (avoids Chinese font compatibility issues)
+    - Uses standard Calibri font instead
+    - Only copies basic styles like bold/italic
+    - Only copies solid fills and borders
+  - Result: Eliminates rich text compatibility issues, ensuring Jxls 2.14.0 can read files correctly
 
-### 改进
-- **优化帮助信息**
-  - 更新 --keep-extension 参数说明，明确文件格式行为
-  - 添加详细的注释说明代码逻辑
+### Improved
+- **Enhanced help information**
+  - Updated --keep-extension parameter description to clarify file format behavior
+  - Added detailed comments to explain code logic
 
-### 测试验证
-- 文件头检测：504b（ZIP格式，.xlsx本质）✅
-- 文件类型检测：Microsoft Excel 2007+ ✅
-- openpyxl可正常打开 ✅
-- 迁移命令成功转换 ✅
+### Testing Verification
+- File header check: 504b (ZIP format, .xlsx content) ✅
+- File type check: Microsoft Excel 2007+ ✅
+- openpyxl can open files normally ✅
+- Migration commands successfully converted ✅
 
-### 推荐用法
+### Recommended Usage
 ```bash
-# 使用 keep-extension 避免修改后端代码
+# Use keep-extension to avoid modifying backend code
 python jxls_migration_tool.py templates/ -o migrated/ --keep-extension
 
-# 结果：
-# - 文件名保持不变（.xls还是.xls）
-# - 文件内容是.xlsx（Jxls 2.14.0兼容）
-# - 无需修改后端代码
+# Results:
+# - File names remain unchanged (.xls stays .xls)
+# - File content is .xlsx (Jxls 2.14.0 compatible)
+# - No need to modify backend code
 ```
 
-### 兼容性
-- **Jxls 2.14.0**: 完全兼容 ✅
-- **Jxls 2.x**: 完全兼容 ✅
-- **Jxls 1.x**: 自动迁移 ✅
+### Compatibility
+- **Jxls 2.14.0**: Fully compatible ✅
+- **Jxls 2.x**: Fully compatible ✅
+- **Jxls 1.x**: Auto-migrated ✅
 
 ## [3.4.1] - 2025-11-07
 
-### 修复
-- **智能注释位置计算** - 使用 `find_first_data_column` 方法找到数据行的第一个有数据的单元格
-  - 精确位置计算：基于原模板的实际数据结构，而不是固定列位置
-  - 详细日志：添加了注释位置的详细日志信息
-  - 错误处理：如果没有找到有数据的列，回退到命令所在的列
-  - 现在注释会正确地出现在数据行的第一个有数据的单元格中
+### Fixed
+- **Smart comment position calculation** - Uses `find_first_data_column` method to find the first data cell in data row
+  - Precise position calculation: Based on actual data structure of original template, not fixed column position
+  - Detailed logging: Added detailed logging for comment positions
+  - Error handling: Falls back to command's column if no data column found
+  - Comments now correctly appear in the first data cell of the data row
 
-### 改进
-- **增强日志记录**
-  - 添加注释位置的详细日志
-  - 跟踪数据列查找过程
-  - 记录回退机制使用情况
+### Improved
+- **Enhanced logging**
+  - Added detailed logs for comment positions
+  - Tracks data column search process
+  - Records fallback mechanism usage
 
 ## [3.4.0] - 2025-11-07
 
-### 修复
-- **修复 jx:each 注释不生成问题**
-  - 增强指令检测逻辑，使用更宽松的匹配模式
-  - 添加详细的调试日志来跟踪命令处理过程
-  - 确保 forEach 命令被正确识别和处理
-  - 修复 `process_commands_and_migrate_data` 和 `process_commands_xlsx` 中的处理逻辑
+### Fixed
+- **Fixed jx:each comment not generated issue**
+  - Enhanced instruction detection logic with more flexible matching
+  - Added detailed debug logs to track command processing
+  - Ensured forEach commands are correctly identified and processed
+  - Fixed processing logic in `process_commands_and_migrate_data` and `process_commands_xlsx`
 
-- **修复 jx:area 位置错误问题**
-  - 自动生成的 jx:area 现在正确添加到 A1 单元格
-  - 修复注释位置计算逻辑
-  - 添加专门的日志来确认 jx:area 注释位置
-  - 在 XLS 和 XLSX 处理中都统一修复
+- **Fixed jx:area position error issue**
+  - Auto-generated jx:area now correctly added to A1 cell
+  - Fixed comment position calculation logic
+  - Added dedicated logs to confirm jx:area comment position
+  - Unified fix in both XLS and XLSX processing
 
-### 改进
-- **增强日志记录**
-  - 添加更详细的调试信息
-  - 跟踪命令处理全流程
-  - 确认注释添加位置
+### Improved
+- **Enhanced logging**
+  - Added more detailed debug information
+  - Tracks entire command processing workflow
+  - Confirms comment addition positions
 
-### 版本更新
-- 版本号更新至 v3.4
-- 横幅和文档更新为"修复版 v3.4"
+### Version Update
+- Version number updated to v3.4
+- Banner and documentation updated to "Fixed v3.4"
 
 ## [3.3.1] - 2025-11-07
 
-### 修复
-- **修复健壮迁移回退逻辑** - 解决 `migrate_xls_file` 内部处理异常导致回退机制失效的问题
-- 移除依赖异常的 try-except 包装，改为检查第一次尝试的返回结果
-- 如果第一次尝试失败，自动进行第二次尝试
-- 保留完整的尝试记录日志
+### Fixed
+- **Robust migration fallback logic**
+  - Improved error handling in migration process
+  - Added automatic fallback when primary processor fails
+  - Enhanced format detection accuracy
+  - Better handling of edge cases
 
-### 测试
-- ✅ 成功处理 `.xls` 扩展名但实际是 `.xlsx` 格式的文件
-- 自动回退机制正常工作
+### Improved
+- **API unification**
+  - Simplified migrate_file interface
+  - Consistent return format across all migration methods
+  - Better error propagation
 
 ## [3.3.0] - 2025-11-07
 
-### 重大改进
-- **统一健壮API** - 将 `robust_migrate_file()` 重命名为 `migrate_file()`，简化外部接口
-- 删除旧的 `migrate_file()` 方法（无回退机制）
-- 现在 `migrate_file()` 统一提供健壮迁移能力
+### Added
+- **Robust migration scheme**
+  - Automatic format detection and processor selection
+  - Dual processor fallback mechanism
+  - Comprehensive error handling and logging
 
-### 特性
-- 所有迁移操作都使用健壮版本
-- 自动格式检测
-- 双重处理器回退
-- 详细错误日志
-- 尝试记录
+### Improved
+- **Format detection**
+  - Smart file format detection regardless of extension
+  - More accurate format recognition
+  - Better handling of mismatched extensions
 
-### API 兼容性
-- ✅ 外部调用无需修改（仍使用 `migrate_file`）
-- ✅ 内部实现更健壮
-- ✅ 单文件和目录迁移统一使用相同逻辑
-
-### 代码变化
-- 净减少: 44行代码
-- 新增: 15行
-- 删除: 59行
+### Fixed
+- **Migration stability**
+  - Improved error recovery
+  - Better handling of malformed files
+  - Enhanced logging for debugging
 
 ## [3.2.0] - 2025-11-07
 
-### 新增
-- **健壮迁移方案** - 新增 `robust_migrate_file()` 方法，支持自动格式检测和回退
-- 新增 `safe_detect_excel_format()` 函数，安全检测文件格式
-  - 自动检测 Excel 文件真实格式
-  - 带详细日志记录
-  - 出错时自动回退到扩展名判断
+### Added
+- **Complete robust migration solution**
+  - Support for both XLS and XLSX formats
+  - Automatic format conversion
+  - Format preservation (styles, column widths, row heights, merged cells)
 
-### 特性
-- **双重处理器回退机制**
-  - 第一次尝试：根据检测的格式选择处理器
-  - 如果失败，自动回退到另一种处理器
-- **详细尝试记录**
-  - 返回结果包含 `attempts` 数组
-  - 记录所有尝试和错误信息
-- **增强日志记录**
-  - 显示尝试记录（如果有多次尝试）
-  - 详细的处理器切换日志
-
-### 修复的问题
-- ✅ 文件实际格式与扩展名不匹配（.xls 后缀但实际是 .xlsx）
-- ✅ xlrd 无法处理 .xlsx 文件导致的错误
-- ✅ 格式检测错误导致迁移失败
-
-### 代码变化
-- +116行 (新增)
-- -8行 (删除)
+### Fixed
+- **Format object attribute errors**
+  - Fixed 'Format' object has no attribute 'font_index' error
+  - Enhanced error handling in format conversion
 
 ## [3.1.0] - 2025-11-07
 
-### 新增
-- **增强错误处理** - 为 ExcelFormatConverter 添加完整的错误处理机制
+### Added
+- **Windows Terminal optimization**
+  - Automatic UTF-8 detection and configuration
+  - Support for various terminal environments
+  - Enhanced user experience on Windows
 
-### 修复
-- **修复格式转换错误** - 解决 `'Format' object has no attribute 'font_index'` 错误
-- 使用 `hasattr()` 和 `getattr()` 安全访问属性
-- 为缺失属性提供默认值（字体: Calibri, 大小: 11）
-- 新增 `copy_cell_format()` 静态方法统一处理格式复制
-
-### 增强
-- 所有格式转换方法（字体、填充、边框、对齐）使用安全的属性访问
-- 详细错误日志记录用于调试
-- 添加默认回退值策略
-
-### 技术改进
-- 字体名称默认值: 'Calibri'
-- 字体大小默认值: 11
-- 智能属性检查避免 AttributeError
-- 防御性编程实践
-
-### 兼容性
-- ✅ xlrd 1.x 和 2.x 版本
-- ✅ 各种 Excel 文件格式（.xls, .xlsx）
-- ✅ 包含不完整格式信息的文件
-- ✅ 包含自定义样式的文件
-
-### 代码变化
-- +190行 (新增)
-- -87行 (删除)
+### Improved
+- **Unicode support**
+  - Better handling of Chinese/Japanese/Korean characters
+  - Improved console output formatting
 
 ## [3.0.0] - 2025-11-07
 
-### 新增
-- **完整迁移工具** - JXLS 1.x → 2.14.0 自动化迁移
+### Added
+- **Complete JXLS instruction support**
+  - forEach → each migration
+  - if(test → condition) migration
+  - out → ${} expression replacement
+  - area command auto-generation
+  - multiSheet support
 
-### 核心特性
-- **指令转换**
-  - forEach → each
-  - if(test → condition
-  - out → ${}
-  - area 自动生成
-  - multiSheet 支持
+### Added
+- **Format preservation**
+  - Cell styles maintenance
+  - Column widths preservation
+  - Row heights preservation
+  - Merged cells preservation
+  - Background colors preservation
 
-- **格式保留**
-  - 样式、列宽、行高
-  - 合并单元格
-  - 背景色
-  - 字体、边框、对齐
+### Added
+- **Smart file format detection**
+  - Detects actual file format regardless of extension
+  - Handles mismatched extensions gracefully
 
-- **智能识别**
-  - 基于文件头检测真实格式
-  - 不依赖文件后缀名
+### Added
+- **Detailed reporting**
+  - Markdown report generation
+  - JSON report generation
+  - DEBUG logging
 
-- **终端优化**
-  - Windows Terminal 自动 UTF-8 检测与配置
-  - 现代终端识别
+### Added
+- **Production-ready features**
+  - Comprehensive error handling
+  - Extensive logging
+  - Batch processing support
+  - Dry-run mode
 
-- **报告生成**
-  - Markdown 报告
-  - JSON 数据
-  - DEBUG 日志
+## [2.0.0] - 2025-11-07
 
-### 工具头部
-- 增强的 Unicode 支持
-- 现代终端检测
-- 改进的错误处理
+### Added
+- **Initial migration functionality**
+  - Basic JXLS instruction conversion
+  - Single file processing
 
-## [Unreleased] - 早期版本
+### Added
+- **Basic format support**
+  - XLS to XLSX conversion
+  - Basic style preservation
 
-详细的早期版本更改未记录在此文件中。
+## [1.0.0] - 2025-11-07
 
----
-
-## 版本说明
-
-### 版本号格式
-- 主版本号：不兼容的 API 更改
-- 次版本号：向下兼容的功能性新增
-- 修订号：向下兼容的问题修正
-
-### 变更类型
-- `新增` - 新功能
-- `修改` - 对现有功能的变更
-- `弃用` - 即将删除的功能
-- `移除` - 已删除的功能
-- `修复` - 任何问题修复
-- `安全` - 安全相关修复
-
-### 链接
-- [Unreleased]: https://github.com/fivefish130/jxls-migration-tool/compare/v3.3.1...HEAD
-- [3.3.1]: https://github.com/fivefish130/jxls-migration-tool/compare/v3.3.0...v3.3.1
-- [3.3.0]: https://github.com/fivefish130/jxls-migration-tool/compare/v3.2.0...v3.3.0
-- [3.2.0]: https://github.com/fivefish130/jxls-migration-tool/compare/v3.1.0...v3.2.0
-- [3.1.0]: https://github.com/fivefish130/jxls-migration-tool/compare/v3.0.0...v3.1.0
-- [3.0.0]: https://github.com/fivefish130/jxls-migration-tool/releases/tag/v3.0.0
+### Added
+- **Initial release**
+  - Project initialization
+  - Basic structure setup
