@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m py_compile:*)",
+      "Bash(python:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(python3 -c:*)",
+      "Bash(mkdir:*)",
+      "Bash(tree:*)",
+      "Bash(pip:*)",
+      "Bash(git log --all --full-history --source --name-only -- \"tests/*\")",
+      "Bash(git checkout HEAD -- tests/README.md)",
+      "Bash(git reset:*)",
+      "Bash(.gitignore)",
+      "Bash(find:*)",
+      "Bash(rm -rf jxls_migration/)",
+      "Bash(rm:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
