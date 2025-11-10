@@ -1094,9 +1094,26 @@ class JxlsMigrationTool:
 
             # 保存文件
             if not self.dry_run:
-                self.logger.debug(f"保存XLSX文件: {xlsx_path}")
-                xlsx_book.save(xlsx_path)
-                self.logger.info(f"  已保存: {xlsx_path}")
+                # 始终保存为.xlsx格式，然后重命名
+                from pathlib import Path
+                output_path_obj = Path(xlsx_path)
+                actual_xlsx_path = str(output_path_obj.with_suffix('.xlsx'))
+
+                self.logger.debug(f"保存XLSX文件: {actual_xlsx_path}")
+                xlsx_book.save(actual_xlsx_path)
+
+                # 如果用户要求保持.xls扩展名，则重命名文件（但内容仍是.xlsx）
+                if output_path_obj.suffix.lower() == '.xls':
+                    import os
+                    import shutil
+                    # 删除旧文件（如果存在）
+                    if os.path.exists(xlsx_path):
+                        os.remove(xlsx_path)
+                    # 重命名为用户期望的扩展名
+                    shutil.move(actual_xlsx_path, xlsx_path)
+                    self.logger.info(f"  已保存: {xlsx_path} (内容为.xlsx格式)")
+                else:
+                    self.logger.info(f"  已保存: {xlsx_path}")
 
             result['success'] = True
 
@@ -1164,9 +1181,26 @@ class JxlsMigrationTool:
 
             # 保存文件
             if not self.dry_run:
-                self.logger.debug(f"保存XLSX文件: {output_path}")
-                wb.save(output_path)
-                self.logger.info(f"  已保存: {output_path}")
+                # 始终保存为.xlsx格式，然后重命名
+                from pathlib import Path
+                output_path_obj = Path(output_path)
+                actual_xlsx_path = str(output_path_obj.with_suffix('.xlsx'))
+
+                self.logger.debug(f"保存XLSX文件: {actual_xlsx_path}")
+                wb.save(actual_xlsx_path)
+
+                # 如果用户要求保持.xls扩展名，则重命名文件（但内容仍是.xlsx）
+                if output_path_obj.suffix.lower() == '.xls':
+                    import os
+                    import shutil
+                    # 删除旧文件（如果存在）
+                    if os.path.exists(output_path):
+                        os.remove(output_path)
+                    # 重命名为用户期望的扩展名
+                    shutil.move(actual_xlsx_path, output_path)
+                    self.logger.info(f"  已保存: {output_path} (内容为.xlsx格式)")
+                else:
+                    self.logger.info(f"  已保存: {output_path}")
 
             result['success'] = True
 
