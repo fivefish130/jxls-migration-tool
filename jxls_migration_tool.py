@@ -716,7 +716,7 @@ class ExcelFormatConverter:
     @staticmethod
     def copy_cell_format(xls_cell, xls_book, xlsx_cell):
         """
-        安全地复制单元格格式
+        安全地复制单元格格式（简化版，避免富文本问题）
 
         Args:
             xls_cell: xlrd单元格对象
@@ -736,26 +736,34 @@ class ExcelFormatConverter:
 
             xls_format = xls_book.xf_list[xf_index]
 
-            # 获取字体索引
+            # 复制最基础的格式：仅复制粗体/斜体（避免富文本问题）
             font_index = getattr(xls_format, 'font_index', None)
             if font_index is not None and hasattr(xls_book, 'font_list'):
                 if font_index < len(xls_book.font_list):
                     xls_font = xls_book.font_list[font_index]
-                    xlsx_cell.font = ExcelFormatConverter.convert_font(xls_font, xls_book)
+                    # 只复制样式，不复制字体名称（避免中文字体导致的兼容性问题）
+                    font_args = {}
+                    if hasattr(xls_font, 'bold') and xls_font.bold:
+                        font_args['bold'] = True
+                    if hasattr(xls_font, 'italic') and xls_font.italic:
+                        font_args['italic'] = True
+                    if font_args:
+                        # 使用默认字体，仅应用样式
+                        xlsx_cell.font = Font(name='Calibri', size=11, **font_args)
 
-            # 填充
+            # 简化填充复制：仅复制纯色填充
             fill = ExcelFormatConverter.convert_fill(xls_format, xls_book)
-            if fill:
+            if fill and fill.fill_type == 'solid':  # 仅复制纯色填充
                 xlsx_cell.fill = fill
 
-            # 边框
+            # 简化边框复制：仅复制有边框的情况
             border = ExcelFormatConverter.convert_border(xls_format)
-            if border and any([border.left, border.right, border.top, border.bottom]):
+            if border and any([border.left.style, border.right.style, border.top.style, border.bottom.style]):
                 xlsx_cell.border = border
 
-            # 对齐
+            # 简化对齐复制：仅复制基本对齐
             alignment = ExcelFormatConverter.convert_alignment(xls_format)
-            xlsx_cell.alignment = alignment
+            # 保持默认对齐，不强制设置（避免富文本问题）
 
         except Exception as e:
             # 记录详细错误信息用于调试
@@ -881,13 +889,22 @@ class JxlsMigrationTool:
 
             # 确定输出文件后缀
             if self.keep_extension:
-                # 保持原后缀
-                output_ext = excel_file.suffix
+                # 保持原后缀名，但文件内容始终为.xlsx格式
+                # .xls输入 → 输出*..xlsx (Jxls 2.14.0需要.xlsx格式)
+                # .xlsx输入 → 输出*.xlsx
+                input_ext = excel_file.suffix.lower()
+                if input_ext == '.xls':
+                    # .xls文件转换为.xlsx格式，但文件名保持.xls后缀
+                    output_ext = '.xlsx'  # 实际文件格式
+                    output_file = output_path / rel_path.parent / (rel_path.stem + '.xls')  # 但文件名保持.xls
+                else:
+                    # .xlsx文件直接输出.xlsx
+                    output_ext = '.xlsx'
+                    output_file = output_path / rel_path.parent / (rel_path.stem + output_ext)
             else:
                 # 转换为.xlsx
                 output_ext = '.xlsx'
-
-            output_file = output_path / rel_path.parent / (rel_path.stem + output_ext)
+                output_file = output_path / rel_path.parent / (rel_path.stem + output_ext)
 
             # 创建子目录
             if not self.dry_run:
@@ -2128,7 +2145,7 @@ def main():
     parser.add_argument('-f', '--file', action='store_true', help='迁移单个文件（而不是目录）')
     parser.add_argument('--dry-run', action='store_true', help='试运行模式（不实际修改文件）')
     parser.add_argument('--keep-extension', action='store_true',
-                        help='保持原文件后缀（.xls保持.xls，.xlsx保持.xlsx）。默认：统一转为.xlsx')
+                        help='保持原文件后缀名，但文件内容始终为.xlsx格式（.xls文件转换为.xlsx格式但文件名保持.xls，.xlsx文件保持.xlsx）')
     parser.add_argument('--verbose', action='store_true', help='详细日志输出')
 
     args = parser.parse_args()
@@ -2146,11 +2163,18 @@ def main():
             if not args.output:
                 # 如果没有指定输出，根据keep_extension决定后缀
                 input_path = Path(args.input)
+                input_ext = input_path.suffix.lower()
                 if args.keep_extension:
-                    output_ext = input_path.suffix
+                    # 保持原后缀名，但文件内容始终为.xlsx格式
+                    if input_ext == '.xls':
+                        # .xls文件转换为.xlsx格式，但文件名保持.xls后缀
+                        output_file = str(input_path.with_suffix('.xls'))
+                    else:
+                        # .xlsx文件直接输出.xlsx
+                        output_file = str(input_path.with_suffix('.xlsx'))
                 else:
-                    output_ext = '.xlsx'
-                args.output = str(input_path.parent / (input_path.stem + output_ext))
+                    output_file = str(input_path.with_suffix('.xlsx'))
+                args.output = output_file
 
             # 设置日志
             tool.logger = setup_logging(None, args.dry_run, args.verbose)
