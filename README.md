@@ -35,7 +35,9 @@ pip install xlrd==2.0.1 openpyxl
 
 ### Migrate a directory
 ```bash
-# Keep original file extensions (.xls → .xls, .xlsx → .xlsx)
+# Keep original file extensions but convert to .xlsx format
+# .xls files will have .xls extension but .xlsx content (Jxls 2.14.0 compatible)
+# .xlsx files will remain .xlsx extension
 python jxls_migration_tool.py input_directory --keep-extension
 
 # Specify output directory
@@ -44,6 +46,8 @@ python jxls_migration_tool.py input_directory -o output_directory --keep-extensi
 # Dry run (preview changes without modifying files)
 python jxls_migration_tool.py input_directory --dry-run --verbose
 ```
+
+**Note**: `--keep-extension` preserves the original file extension but ensures all files have .xlsx content for Jxls 2.14.0 compatibility. This avoids the need to modify backend code.
 
 ### Migrate a single file
 ```bash

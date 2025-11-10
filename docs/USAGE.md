@@ -668,6 +668,12 @@ python jxls_migration_tool.py prod_templates -o prod_output --keep-extension
 
 ## FAQ
 
+### Q: What does --keep-extension do exactly?
+**A**: The `--keep-extension` flag preserves file extensions but ensures all files have .xlsx content:
+- .xls files: keep .xls extension but .xlsx content (for Jxls 2.14.0 compatibility)
+- .xlsx files: keep .xlsx extension and .xlsx content
+This preserves file names while ensuring backend code doesn't need changes.
+
 ### Q: How long does migration take?
 
 **A**: Typically < 1 second per file. For 50 files, expect < 30 seconds. Large files may take longer.
