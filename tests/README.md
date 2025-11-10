@@ -1,143 +1,155 @@
-# JXLS 迁移工具测试用例
+# JXLS Migration Tool Test Cases
 
-本目录包含用于测试 JXLS 迁移工具的示例文件。
+This directory contains example files for testing the JXLS Migration Tool.
 
-## 📁 测试文件说明
+## 📁 Test File Descriptions
 
 ### 1. asin_top_tag.xls
-**描述**: 单 Sheet 测试文件
-**用途**: 测试基本的 JXLS 1.x → 2.x 迁移功能
-**特点**:
-- 包含 forEach 循环指令
-- 简单的数据结构
-- 适合验证基础迁移功能
+**Description**: Single sheet test file
+**Purpose**: Test basic JXLS 1.x → 2.x migration functionality
+**Features**:
+- Contains forEach loop instruction
+- Simple data structure
+- Suitable for verifying basic migration functionality
 
-**迁移命令**:
+**Migration Command**:
 ```bash
-# 从项目根目录运行
+# Run from project root
 python jxls_migration_tool.py tests/asin_top_tag.xls -f -o tests/asin_top_tag_output.xlsx --keep-extension --verbose
 ```
 
 ### 2. tax_contract_multi_sheets_export.xlsx
-**描述**: 多 Sheet 测试文件
-**用途**: 测试复杂的多工作表 Excel 文件迁移
-**特点**:
-- 包含 4 个工作表：SKU维度、PO维度、合同维度、发票明细
-- 每个 Sheet 都有独立的 forEach 循环
-- 适合验证多 Sheet 处理能力
+**Description**: Multi-sheet test file
+**Purpose**: Test complex multi-worksheet Excel file migration
+**Features**:
+- Contains 4 worksheets: SKU dimension, PO dimension, contract dimension, invoice details
+- Each sheet has independent forEach loops
+- Suitable for verifying multi-sheet processing capability
 
-**迁移命令**:
+**Migration Command**:
 ```bash
-# 从项目根目录运行
+# Run from project root
 python jxls_migration_tool.py tests/tax_contract_multi_sheets_export.xlsx -f -o tests/tax_contract_output.xlsx --keep-extension --verbose
 ```
 
-## 🛠️ 迁移工具使用说明
+## 🛠️ Migration Tool Usage Guide
 
-### 基本语法
+### Basic Syntax
 ```bash
-python jxls_migration_tool.py <输入文件或目录> [选项]
+python jxls_migration_tool.py <input file or directory> [options]
 ```
 
-### 常用选项
+### Common Options
 
-| 选项 | 说明 | 示例 |
-|------|------|------|
-| `-f` | 迁移单个文件（而不是目录） | `-f` |
-| `-o, --output` | 指定输出文件/目录路径 | `-o output/` |
-| `--keep-extension` | 保持原文件后缀名 | `--keep-extension` |
-| `--dry-run` | 试运行（不实际修改文件） | `--dry-run` |
-| `--verbose` | 详细日志输出 | `--verbose` |
-| `-h, --help` | 显示帮助信息 | `-h` |
+| Option | Description | Example |
+|--------|-------------|---------|
+| `-f` | Migrate single file (not directory) | `-f` |
+| `-o, --output` | Specify output file/directory path | `-o output/` |
+| `--keep-extension` | Keep original file extension | `--keep-extension` |
+| `--dry-run` | Preview mode (doesn't modify files) | `--dry-run` |
+| `--verbose` | Verbose logging output | `--verbose` |
+| `-h, --help` | Show help information | `-h` |
 
-### 完整示例
+### Complete Examples
 
-#### 示例 1: 单文件迁移
+#### Example 1: Single File Migration
 ```bash
 python jxls_migration_tool.py tests/asin_top_tag.xls -f -o tests/output.xlsx --keep-extension --verbose
 ```
 
-#### 示例 2: 目录批量迁移
+#### Example 2: Directory Batch Migration
 ```bash
-# 迁移整个目录，保持扩展名
+# Migrate entire directory, keep extensions
 python jxls_migration_tool.py exceltemplate_backup/ -o exceltemplate/ --keep-extension --verbose
 
-# 迁移整个目录，转换为 .xlsx
+# Migrate entire directory, convert to .xlsx
 python jxls_migration_tool.py exceltemplate_backup/ -o exceltemplate/ --verbose
 ```
 
-#### 示例 3: 试运行（预览）
+#### Example 3: Dry Run (Preview)
 ```bash
-# 预览更改，不实际修改文件
+# Preview changes without actually modifying files
 python jxls_migration_tool.py tests/ -f -o tests/output/ --dry-run --verbose
 ```
 
-## ✅ 验证迁移结果
+## ✅ Verify Migration Results
 
-### 查看输出
-迁移成功后，工具会显示：
+### View Output
+After successful migration, the tool will display:
 ```
-✅ 迁移成功: 输出文件路径
-🔧 发现 X 个命令，转换 Y 个
+✅ Migration successful: output file path
+🔧 Found X commands, converted Y commands
 ```
 
-### 手动验证
-1. **打开输出文件** - 使用 Excel 或 WPS 打开生成的 `.xlsx` 文件
-2. **检查注释** - 查看 A1 和 A2 单元格是否包含正确的 JXLS 2.x 注释
-3. **验证表达式** - 确认 `<jx:...>` 标签已转换为 `${...}` 表达式
+### Manual Verification
+1. **Open output file** - Use Excel or WPS to open the generated `.xlsx` file
+2. **Check comments** - Verify that A1 and A2 cells contain correct JXLS 2.x comments
+3. **Validate expressions** - Confirm that `<jx:...>` tags have been converted to `${...}` expressions
 
-### 自动化验证脚本
-可以使用 Python 脚本验证结果：
+### Automated Verification Script
+You can use Python script to verify results:
 
 ```python
 from openpyxl import load_workbook
 
-# 打开输出文件
+# Open output file
 wb = load_workbook('tests/output.xlsx')
 ws = wb.active
 
-# 检查 A1 注释
+# Check A1 comment
 if ws['A1'].comment:
-    print(f"A1 注释: {ws['A1'].comment.text}")
+    print(f"A1 comment: {ws['A1'].comment.text}")
 
-# 检查 A2 注释
+# Check A2 comment
 if ws['A2'].comment:
-    print(f"A2 注释: {ws['A2'].comment.text}")
+    print(f"A2 comment: {ws['A2'].comment.text}")
 ```
 
-## 🔍 常见问题
+## 🔍 Frequently Asked Questions
 
-### Q: 如果迁移失败怎么办？
-A: 使用 `--verbose` 选项查看详细错误信息，或检查日志文件。
+### Q: What if migration fails?
+A: Use the `--verbose` option to view detailed error information, or check the log file.
 
-### Q: 注释位置不对怎么办？
-A: v3.4.1 已修复智能注释位置问题。注释现在会正确地出现在数据行的第一个有数据的单元格中。
+### Q: What if comment positions are incorrect?
+A: v3.4.1 has fixed the smart comment position issue. Comments now correctly appear in the first data cell of the data row.
 
-### Q: 支持哪些文件格式？
-A: 支持 `.xls` 和 `.xlsx` 格式。工具会自动检测真实格式，即使扩展名与实际格式不匹配。
+### Q: What file formats are supported?
+A: Supports `.xls` and `.xlsx` formats. The tool automatically detects the actual format, even if the extension doesn't match the actual format.
 
-### Q: 能否批量迁移？
-A: 可以。直接指定目录路径，工具会自动处理目录下的所有 Excel 文件。
+### Q: Can I batch migrate?
+A: Yes. Simply specify the directory path, and the tool will automatically process all Excel files in the directory.
 
-## 📋 测试检查清单
+## 📋 Test Checklist
 
-- [ ] 迁移成功无错误
-- [ ] JXLS 指令正确转换
-- [ ] A1 单元格有 jx:area 注释
-- [ ] A2 单元格有 jx:each 注释
-- [ ] 表达式格式正确 `${...}`
-- [ ] 原有格式保留
-- [ ] 合并单元格保留
-- [ ] 列宽行高保留
+- [ ] Migration successful without errors
+- [ ] JXLS instructions correctly converted
+- [ ] A1 cell has jx:area comment
+- [ ] A2 cell has jx:each comment
+- [ ] Expression format correct `${...}`
+- [ ] Original formatting preserved
 
-## 📞 技术支持
+## 📂 Test File Inventory
 
-如果遇到问题，请：
-1. 使用 `--verbose` 选项获取详细日志
-2. 查看 `jxls_migration.log` 文件
-3. 检查 JXLS 迁移工具的 CHANGELOG.md 了解最新修复
+| File | Type | Sheets | JXLS Instructions | Status |
+|------|------|--------|-------------------|--------|
+| `asin_top_tag.xls` | .xls | 1 | forEach, area | ✅ Tested |
+| `hot_sock_tag.xls` | .xls | 1 | forEach, area | ✅ Tested |
+| `tax_contract_multi_sheets_export.xlsx` | .xlsx | 4 | forEach (per sheet) | ✅ Tested |
+
+## 🐛 Reporting Issues
+
+If you encounter issues during testing:
+1. Use `--verbose` flag for detailed logs
+2. Check the migration report in the output directory
+3. Submit an issue with log file attached
+4. Include the original Excel file for reproduction
+
+## 📚 Additional Resources
+
+- **Main Documentation**: See `/docs/USAGE.md` for detailed usage guide
+- **API Reference**: See `/docs/API.md` for programmatic API documentation
+- **Changelog**: See `/CHANGELOG.md` for version history
 
 ---
 
-**当前版本**: v3.4.1 (Smart Comment Position)
-**更新日期**: 2025-11-07
+**Note**: This test suite is designed to verify the migration tool's functionality with real-world Excel templates. All test files are from actual production templates.
