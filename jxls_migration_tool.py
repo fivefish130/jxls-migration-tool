@@ -1031,7 +1031,7 @@ class JxlsMigrationTool:
     """JXLS 1.x到2.x迁移工具"""
 
     def __init__(self, dry_run: bool = False, output_dir: Optional[str] = None,
-                 keep_extension: bool = False, verbose: bool = False, use_xlsxwriter: bool = False):
+                 keep_extension: bool = False, verbose: bool = False, use_xlsxwriter: bool = True):
         """
         初始化迁移工具
 
@@ -1040,13 +1040,13 @@ class JxlsMigrationTool:
             output_dir: 输出目录
             keep_extension: 是否保持原文件后缀
             verbose: 是否显示详细日志
-            use_xlsxwriter: 是否使用 xlsxwriter（自动使用共享字符串表）
+            use_xlsxwriter: 是否使用 xlsxwriter（强制使用，自动共享字符串表）
         """
         self.dry_run = dry_run
         self.output_dir = output_dir
         self.keep_extension = keep_extension
         self.verbose = verbose
-        self.use_xlsxwriter = use_xlsxwriter and XLSXWRITER_AVAILABLE
+        self.use_xlsxwriter = use_xlsxwriter  # 强制使用 XlsxWriter
         self.logger = None
 
         # Note: logger is set later via setup_logging()
@@ -1100,11 +1100,13 @@ class JxlsMigrationTool:
         log_file = output_path / 'jxls_migration.log' if not self.dry_run else None
         self.logger = setup_logging(log_file, self.dry_run, self.verbose)
 
-        # 显示 XlsxWriter 状态
-        if self.use_xlsxwriter:
-            self.logger.info("✓ 使用 XlsxWriter（自动共享字符串表）")
-        elif XLSXWRITER_AVAILABLE:
-            self.logger.info("ℹ 可用 XlsxWriter，但使用 OpenPyXL（可通过 --use-xlsxwriter 启用）")
+        # 检查 XlsxWriter 是否可用
+        if not XLSXWRITER_AVAILABLE:
+            self.logger.error("❌ 错误: 缺少 xlsxwriter 库")
+            self.logger.error("   请运行: pip install xlsxwriter")
+            raise RuntimeError("XlsxWriter is required but not installed")
+
+        self.logger.info("✓ 使用 XlsxWriter（自动共享字符串表，POI兼容性更好）")
 
         self.logger.info("=" * 80)
         self.logger.info("JXLS 1.x → 2.14.0 自动化迁移工具（修复版 v3.4）")
@@ -2861,14 +2863,13 @@ def main():
   # 详细日志输出
   python jxls_migration_tool.py input_dir --verbose
 
-  # 优先使用 OpenPyXL（而不是默认的 XlsxWriter）
-  python jxls_migration_tool.py input_dir --prefer-openpyxl
-
   # 迁移单个文件
   python jxls_migration_tool.py input.xls -f output.xlsx
 
   # 完整示例：保持后缀 + 试运行 + 详细日志
   python jxls_migration_tool.py exceltemplate_backup -o exceltemplate --keep-extension --dry-run --verbose
+
+注意: 需要安装 xlsxwriter (pip install xlsxwriter)
         """
     )
 
@@ -2879,14 +2880,12 @@ def main():
     parser.add_argument('--keep-extension', action='store_true',
                         help='保持原文件后缀名，但文件内容始终为.xlsx格式（.xls文件转换为.xlsx格式但文件名保持.xls，.xlsx文件保持.xlsx）')
     parser.add_argument('--verbose', action='store_true', help='详细日志输出')
-    parser.add_argument('--prefer-openpyxl', action='store_true',
-                        help='优先使用 OpenPyXL 而非 XlsxWriter（用于需要读取XLSX文件的场景）')
 
     args = parser.parse_args()
 
     # 创建迁移工具
-    # 默认使用 XlsxWriter（更好的POI兼容性），除非指定 --prefer-openpyxl
-    use_xlsxwriter = not args.prefer_openpyxl and XLSXWRITER_AVAILABLE
+    # 统一使用 XlsxWriter（更好的POI兼容性）
+    use_xlsxwriter = True
     tool = JxlsMigrationTool(
         dry_run=args.dry_run,
         keep_extension=args.keep_extension,
@@ -2916,11 +2915,13 @@ def main():
             # 设置日志
             tool.logger = setup_logging(None, args.dry_run, args.verbose)
 
-            # 显示 XlsxWriter 状态
-            if tool.use_xlsxwriter:
-                tool.logger.info("✓ 使用 XlsxWriter（自动共享字符串表）")
-            elif XLSXWRITER_AVAILABLE:
-                tool.logger.info("ℹ 可用 XlsxWriter，但使用 OpenPyXL（可通过 --use-xlsxwriter 启用）")
+            # 检查 XlsxWriter 是否可用
+            if not XLSXWRITER_AVAILABLE:
+                tool.logger.error("❌ 错误: 缺少 xlsxwriter 库")
+                tool.logger.error("   请运行: pip install xlsxwriter")
+                sys.exit(1)
+
+            tool.logger.info("✓ 使用 XlsxWriter（自动共享字符串表，POI兼容性更好）")
 
             # 使用健壮的迁移方法，支持自动回退
             result = tool.migrate_file(args.input, args.output)

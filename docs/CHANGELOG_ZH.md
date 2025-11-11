@@ -7,6 +7,43 @@
 
 ## [Unreleased]
 
+## [3.4.4] - 2025-11-11
+
+### 移除
+- **移除OpenPyXL写入模式** - 基于用户反馈，OpenPyXL模式不稳定
+  - 删除 `--prefer-openpyxl` 命令行参数
+  - 强制使用 XlsxWriter 作为唯一写入引擎
+  - 如果未安装 xlsxwriter，工具会报错退出
+  - 提供更清晰的错误消息指导安装
+
+- **简化依赖管理**
+  - xlsxwriter 改为必需依赖（而不是推荐依赖）
+  - openpyxl 仍为必需依赖（用于读取）
+  - xlrd 保持为可选依赖（仅用于 .xls 文件）
+
+### 改进
+- **强制XlsxWriter模式**
+  - 所有输出文件自动使用共享字符串表
+  - 确保与 Apache POI 5.4.0+ 的最佳兼容性
+  - 文件更小，性能更好
+  - 消除双模式导致的混淆
+
+### 文档更新
+- 更新 USAGE.md 移除 `--prefer-openpyxl` 参考
+- 更新依赖安装说明
+- 明确 xlsxwriter 为必需依赖
+- 移除 OpenPyXL 写入模式相关文档
+
+### 兼容性
+- **Apache POI 5.4.0+**: 完全兼容 ✅
+- **JXLS 2.14.0**: 完全兼容 ✅
+- **所有迁移场景**: 使用 XlsxWriter ✅
+
+### 迁移指南
+- **生产环境**: 无需更改，XlsxWriter 提供更好稳定性
+- **开发环境**: 安装 xlsxwriter (pip install xlsxwriter)
+- **CI/CD**: 添加 xlsxwriter 到依赖列表
+
 ## [3.4.3] - 2025-11-11
 
 ### 新增

@@ -181,12 +181,11 @@ python jxls_migration_tool.py [OPTIONS] INPUT_PATH
 - Type: Boolean flag
 - Example: `python jxls_migration_tool.py input_dir --verbose`
 
-##### `--prefer-openpyxl`
-- Description: Prefer OpenPyXL over XlsxWriter for writing (for special scenarios)
-- Default: False (uses XlsxWriter by default for better POI compatibility)
-- Type: Boolean flag
-- Example: `python jxls_migration_tool.py input_dir --prefer-openpyxl`
-- Note: XlsxWriter automatically uses shared strings table, resulting in better compatibility with Apache POI 5.4.0+
+##### (Removed `--prefer-openpyxl` parameter)
+- **Note**: As of v3.4.4, the tool only supports XlsxWriter for writing Excel files
+- **Reason**: XlsxWriter provides better compatibility with Apache POI 5.4.0+ and automatically uses shared strings table
+- **Requirement**: XlsxWriter must be installed (`pip install xlsxwriter`)
+- **Error**: If xlsxwriter is not installed, the tool will exit with an error message
 
 ### Option Combinations
 
@@ -368,22 +367,22 @@ The tool uses a unified read/write strategy to provide the best performance and 
 #### Example Usage
 
 ```bash
-# Default: Uses XlsxWriter (recommended)
+# Standard migration using XlsxWriter
 python jxls_migration_tool.py input_dir
 
-# Explicitly use OpenPyXL
-python jxls_migration_tool.py input_dir --prefer-openpyxl
+# Note: XlsxWriter is the only supported writing engine (v3.4.4+)
+# Install with: pip install xlsxwriter
 ```
 
-### Shared Strings Table Comparison
+### Shared Strings Table
 
-| Feature | XlsxWriter | OpenPyXL (default) |
-|---------|-----------|--------------------|
-| Shared strings | ✅ Automatic | ❌ Inline strings |
-| POI 5.4.0+ compatibility | ✅ Excellent | ⚠️ May have issues |
-| File size | ✅ Smaller | ❌ Larger |
-| Performance | ✅ Faster | - |
-| Functionality | ✅ Complete | ✅ Complete |
+| Feature | XlsxWriter |
+|---------|-----------|
+| Shared strings | ✅ Automatic |
+| POI 5.4.0+ compatibility | ✅ Excellent |
+| File size | ✅ Smaller |
+| Performance | ✅ Faster |
+| Functionality | ✅ Complete |
 
 ### Test Results
 
@@ -397,34 +396,32 @@ unzip -l out/test_openpyxl.xls | grep sharedStrings
 # Output: (no results)
 ```
 
-### When to Use Each
+### When to Use XlsxWriter
 
-#### Use XlsxWriter (default) ✅
-- Production environment deployment
-- Integration with Apache POI 5.4.0+
-- Files containing大量 repeated text
-- Better performance and compatibility
+#### Use XlsxWriter ✅
+- **Production environment deployment**
+- **Integration with Apache POI 5.4.0+**
+- **Files containing大量重复文本**
+- **Better performance and compatibility**
+- **All migration scenarios (v3.4.4+)**
 
-#### Use OpenPyXL (`--prefer-openpyxl`)
-- Need to read existing XLSX files
-- Rely on OpenPyXL-specific features
-- Backward compatibility requirements
-- Debugging and development scenarios
+**Note**: XlsxWriter is now the only supported writing engine since v3.4.4
 
 ### Dependency Management
 
 #### Required Dependencies
 ```bash
+# For writing Excel files (required)
+pip install xlsxwriter
+
+# For reading Excel files (required)
 pip install openpyxl
 ```
 
-#### Recommended Dependencies
+#### Optional Dependencies
 ```bash
 # For .xls file support (optional)
 pip install 'xlrd<2.0'
-
-# For better compatibility (recommended)
-pip install xlsxwriter
 ```
 
 #### xlrd Version Note
