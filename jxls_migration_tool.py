@@ -1892,7 +1892,10 @@ class JxlsMigrationTool:
                     })
                     result['converted_commands'] += 1
 
-                    self.logger.info(f"      ✅ 转换forEach: {comment_text}")
+                    # 明确日志：JXLS 1.x → 2.x 迁移
+                    self.logger.info(f"      🔄 迁移 JXLS 1.x → 2.x: jx:forEach → jx:each")
+                    self.logger.info(f"         原始指令: {cmd.raw_text[:60]}...")
+                    self.logger.info(f"         迁移结果: {comment_text}")
 
                 else:
                     self.logger.warning(f"      ⚠️ 未找到forEach结束标签")
@@ -1941,7 +1944,8 @@ class JxlsMigrationTool:
                     'action': f'保留area命令: {comment_text}'
                 })
                 result['converted_commands'] += 1
-                self.logger.info(f"      ✅ 保留area命令: {comment_text}")
+                # 明确日志：JXLS 2.x 保留 area 指令
+                self.logger.info(f"      🔄 JXLS 2.x 保留 area 指令: {comment_text}")
 
             elif isinstance(cmd, MultiSheetCommand):
                 comment_text = cmd.to_jx_multi_sheet_v2()
@@ -2060,7 +2064,8 @@ class JxlsMigrationTool:
                     'action': f'自动添加area命令: {area_comment}'
                 })
                 result['converted_commands'] += 1
-                self.logger.info(f"      ✅ 自动生成area命令: {area_comment}")
+                # 明确日志：自动生成 JXLS 2.x area 指令
+                self.logger.info(f"      🔄 自动生成 JXLS 2.x area 指令: {area_comment}")
 
         # 复制列宽
         try:
@@ -2189,7 +2194,10 @@ class JxlsMigrationTool:
                     })
                     result['converted_commands'] += 1
 
-                    self.logger.info(f"      ✅ 转换forEach: {comment_text}")
+                    # 明确日志：JXLS 1.x → 2.x 迁移
+                    self.logger.info(f"      🔄 迁移 JXLS 1.x → 2.x: jx:forEach → jx:each")
+                    self.logger.info(f"         原始指令: {cmd.raw_text[:60]}...")
+                    self.logger.info(f"         迁移结果: {comment_text}")
 
             elif isinstance(cmd, IfCommand):
                 end_row = self.find_end_tag(xls_sheet, cmd.location.row, '/jx:if')
@@ -2235,7 +2243,8 @@ class JxlsMigrationTool:
                     'action': f'保留area命令: {comment_text}'
                 })
                 result['converted_commands'] += 1
-                self.logger.info(f"      ✅ 保留area命令: {comment_text}")
+                # 明确日志：JXLS 2.x 保留 area 指令
+                self.logger.info(f"      🔄 JXLS 2.x 保留 area 指令: {comment_text}")
 
             elif isinstance(cmd, MultiSheetCommand):
                 comment_text = cmd.to_jx_multi_sheet_v2()
@@ -2327,7 +2336,8 @@ class JxlsMigrationTool:
                     'action': f'自动添加area命令: {area_comment}'
                 })
                 result['converted_commands'] += 1
-                self.logger.info(f"      ✅ 自动生成area命令: {area_comment}")
+                # 明确日志：自动生成 JXLS 2.x area 指令
+                self.logger.info(f"      🔄 自动生成 JXLS 2.x area 指令: {area_comment}")
 
         # 复制列宽
         try:
@@ -2433,7 +2443,10 @@ class JxlsMigrationTool:
                         'action': f'删除forEach标签行，添加注释: {comment_text} (位置: {get_column_letter(first_data_col)}{adjusted_data_row})'
                     })
                     result['converted_commands'] += 1
-                    self.logger.info(f"      ✅ 转换forEach: {comment_text}")
+                    # 明确日志：JXLS 1.x → 2.x 迁移
+                    self.logger.info(f"      🔄 迁移 JXLS 1.x → 2.x: jx:forEach → jx:each")
+                    self.logger.info(f"         原始指令: {cmd.raw_text[:60]}...")
+                    self.logger.info(f"         迁移结果: {comment_text}")
 
             elif isinstance(cmd, IfCommand):
                 end_row = self.find_end_tag_xlsx(ws, cmd.location.row, '/jx:if')
@@ -2476,7 +2489,8 @@ class JxlsMigrationTool:
                     'action': f'保留area命令: {comment_text}'
                 })
                 result['converted_commands'] += 1
-                self.logger.info(f"      ✅ 保留area命令: {comment_text}")
+                # 明确日志：JXLS 2.x 保留 area 指令
+                self.logger.info(f"      🔄 JXLS 2.x 保留 area 指令: {comment_text}")
 
             elif isinstance(cmd, MultiSheetCommand):
                 comment_text = cmd.to_jx_multi_sheet_v2()
@@ -2556,7 +2570,8 @@ class JxlsMigrationTool:
                     'action': f'自动添加area命令: {area_comment}'
                 })
                 result['converted_commands'] += 1
-                self.logger.info(f"      ✅ 自动生成area命令: {area_comment}")
+                # 明确日志：自动生成 JXLS 2.x area 指令
+                self.logger.info(f"      🔄 自动生成 JXLS 2.x area 指令: {area_comment}")
 
         # 添加注释
         for row, col, comment_text in comments_to_add:
