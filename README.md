@@ -25,11 +25,14 @@ A powerful, production-ready tool for automated migration from JXLS 1.x to JXLS 
 - Python 3.6+
 - xlrd 2.0.1
 - openpyxl
+- xlsxwriter (required for writing Excel files)
 
 ### Quick Install
 ```bash
-pip install xlrd==2.0.1 openpyxl
+pip install xlrd==2.0.1 openpyxl xlsxwriter
 ```
+
+**Note**: xlsxwriter is required for writing Excel files with automatic shared strings table support (better POI 5.4.0+ compatibility).
 
 ## 🚀 Quick Start
 

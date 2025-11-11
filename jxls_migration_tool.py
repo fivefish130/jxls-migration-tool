@@ -97,7 +97,8 @@ try:
     import xlsxwriter
     XLSXWRITER_AVAILABLE = True
 except ImportError:
-    print("警告: 缺少xlsxwriter库，将使用openpyxl (pip install xlsxwriter)")
+    print("错误: 缺少xlsxwriter库，迁移工具需要此库来写入Excel文件")
+    print("       请运行: pip install xlsxwriter")
     XLSXWRITER_AVAILABLE = False
 
 

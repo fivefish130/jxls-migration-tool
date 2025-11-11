@@ -78,6 +78,7 @@ setup(
     install_requires=[
         "xlrd==2.0.1",
         "openpyxl>=3.0.0",
+        "xlsxwriter>=3.0.0",
     ],
     extras_require={
         "dev": [
