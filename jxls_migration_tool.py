@@ -1506,6 +1506,28 @@ class JxlsMigrationTool:
             self.logger.debug(f"读取XLS文件: {xls_path}")
             xls_book = xlrd.open_workbook(xls_path, formatting_info=True)
 
+            # 检查是否包含 JXLS 1.x 指令
+            has_jxls1 = False
+            for sheet_idx in range(xls_book.nsheets):
+                xls_sheet = xls_book.sheet_by_index(sheet_idx)
+                jxls_version = self.detect_jxls_version(xls_sheet)
+                if jxls_version == 'jxls1':
+                    has_jxls1 = True
+                    break
+
+            # 如果不包含 JXLS 1.x 指令，可能是 2.x 或普通文件，直接复制
+            if not has_jxls1:
+                self.logger.info(f"  ℹ️ 未发现 JXLS 1.x 指令，直接复制文件（保持原样）")
+                if not self.dry_run:
+                    import shutil
+                    shutil.copy2(xls_path, xlsx_path)
+                    self.logger.info(f"  ✅ 复制完成（未修改）")
+                else:
+                    self.logger.info(f"  ✅ 试运行：文件将保持不变（未修改）")
+                result['success'] = True
+                result['converted_commands'] = 0
+                return result
+
             if self.use_xlsxwriter:
                 # 使用 XlsxWriter（自动共享字符串表）
                 self.logger.debug(f"使用 XlsxWriter 写入文件")
@@ -1667,6 +1689,28 @@ class JxlsMigrationTool:
             # 读取XLSX文件
             self.logger.debug(f"读取XLSX文件: {xlsx_path}")
             wb = load_workbook(actual_file)
+
+            # 检查是否包含 JXLS 1.x 指令
+            has_jxls1 = False
+            for ws in wb.worksheets:
+                jxls_version = self.detect_jxls_version_xlsx(ws)
+                if jxls_version == 'jxls1':
+                    has_jxls1 = True
+                    break
+
+            # 如果不包含 JXLS 1.x 指令，可能是 2.x 或普通文件，直接复制
+            if not has_jxls1:
+                self.logger.info(f"  ℹ️ 未发现 JXLS 1.x 指令，直接复制文件（保持原样）")
+                if not self.dry_run:
+                    import shutil
+                    shutil.copy2(xlsx_path, output_path)
+                    self.logger.info(f"  ✅ 复制完成（未修改）")
+                else:
+                    self.logger.info(f"  ✅ 试运行：文件将保持不变（未修改）")
+                result['success'] = True
+                result['converted_commands'] = 0
+                wb.close()
+                return result
 
             total_commands = 0
             converted_commands = 0
