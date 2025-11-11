@@ -67,12 +67,20 @@ from typing import Dict, List, Tuple, Optional, Any, Set
 from collections import defaultdict
 from dataclasses import dataclass
 
+# xlrd 是可选的 - 仅用于读取旧版 .xls 文件
+# xlrd 2.0.1+ 仅支持 .xlsx，如果需要处理 .xls 请安装 xlrd<2.0
 try:
     import xlrd
     from xlrd import formatting
+    XLRD_AVAILABLE = True
+    XLRD_VERSION = tuple(map(int, xlrd.__version__.split('.')[:2]))
+    if XLRD_VERSION >= (2, 0):
+        print("警告: xlrd 2.0+ 仅支持 .xlsx 文件，无法处理 .xls 文件")
+        print("      如需处理 .xls 文件，请安装: pip install 'xlrd<2.0'")
+        XLRD_AVAILABLE = False
 except ImportError:
-    print("错误: 缺少xlrd库，请运行: pip install xlrd")
-    sys.exit(1)
+    XLRD_AVAILABLE = False
+    print("提示: 缺少xlrd库，.xls 文件将自动转换为 .xlsx 后处理")
 
 try:
     from openpyxl import Workbook, load_workbook
@@ -143,6 +151,64 @@ def setup_logging(log_file: Optional[str] = None, dry_run: bool = False, verbose
         logger.info("=" * 80)
 
     return logger
+
+
+# ============================================================================
+# .xls → .xlsx 转换器
+# ============================================================================
+
+def convert_xls_to_xlsx(xls_path: str) -> Optional[str]:
+    """
+    将 .xls 文件转换为 .xlsx 文件
+
+    Args:
+        xls_path: .xls 文件路径
+
+    Returns:
+        转换后的 .xlsx 文件路径，或 None（转换失败）
+    """
+    import tempfile
+    import shutil
+    from pathlib import Path
+
+    if not XLRD_AVAILABLE:
+        # 如果没有 xlrd，提示用户
+        print(f"  ❌ 无法处理 .xls 文件: {Path(xls_path).name}")
+        print(f"     请安装旧版 xlrd: pip install 'xlrd<2.0'")
+        return None
+
+    try:
+        # 读取 .xls 文件
+        xls_book = xlrd.open_workbook(xls_path)
+
+        # 创建临时 .xlsx 文件
+        temp_dir = Path(tempfile.gettempdir())
+        temp_xlsx = temp_dir / f"{Path(xls_path).stem}_temp.xlsx"
+
+        # 使用 openpyxl 写入
+        wb = Workbook()
+        if 'Sheet' in wb.sheetnames:
+            del wb['Sheet']
+
+        for sheet_idx in range(xls_book.nsheets):
+            xls_sheet = xls_book.sheet_by_index(sheet_idx)
+            ws = wb.create_sheet(title=xls_sheet.name)
+
+            # 复制数据
+            for row_idx in range(xls_sheet.nrows):
+                for col_idx in range(xls_sheet.ncols):
+                    cell = xls_sheet.cell(row_idx, col_idx)
+                    if cell.value is not None:
+                        ws.cell(row=row_idx + 1, column=col_idx + 1, value=cell.value)
+
+        wb.save(str(temp_xlsx))
+        return str(temp_xlsx)
+
+    except Exception as e:
+        print(f"  ❌ 转换失败: {e}")
+        if temp_xlsx.exists():
+            temp_xlsx.unlink()
+        return None
 
 
 # ============================================================================
@@ -2764,7 +2830,7 @@ def print_banner():
 ║  Author: fivefish                                              ║
 ║  Version: 3.4 (Fixed)                                            ║
 ║  Date: 2025-11-07                                                 ║
-║  新特性: 支持 XlsxWriter（自动共享字符串表）                    ║
+║  🔥 默认使用 XlsxWriter（自动共享字符串表，POI兼容性更好）      ║
 ║  修复: jx:each注释生成 + jx:area位置问题                         ║
 ╚═══════════════════════════════════════════════════════════════════╝
 """
@@ -2780,7 +2846,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 使用示例:
-  # 迁移目录（默认：.xls转为.xlsx）
+  # 迁移目录（默认使用 XlsxWriter，自动共享字符串表）
   python jxls_migration_tool.py input_dir
 
   # 迁移目录并保持原文件后缀（推荐）
@@ -2795,14 +2861,14 @@ def main():
   # 详细日志输出
   python jxls_migration_tool.py input_dir --verbose
 
-  # 使用 XlsxWriter（自动共享字符串表，兼容性更好）
-  python jxls_migration_tool.py input_dir --use-xlsxwriter
+  # 优先使用 OpenPyXL（而不是默认的 XlsxWriter）
+  python jxls_migration_tool.py input_dir --prefer-openpyxl
 
   # 迁移单个文件
   python jxls_migration_tool.py input.xls -f output.xlsx
 
-  # 完整示例：保持后缀 + 试运行 + 详细日志 + XlsxWriter
-  python jxls_migration_tool.py exceltemplate_backup -o exceltemplate --keep-extension --dry-run --verbose --use-xlsxwriter
+  # 完整示例：保持后缀 + 试运行 + 详细日志
+  python jxls_migration_tool.py exceltemplate_backup -o exceltemplate --keep-extension --dry-run --verbose
         """
     )
 
@@ -2813,17 +2879,19 @@ def main():
     parser.add_argument('--keep-extension', action='store_true',
                         help='保持原文件后缀名，但文件内容始终为.xlsx格式（.xls文件转换为.xlsx格式但文件名保持.xls，.xlsx文件保持.xlsx）')
     parser.add_argument('--verbose', action='store_true', help='详细日志输出')
-    parser.add_argument('--use-xlsxwriter', action='store_true',
-                        help='使用 XlsxWriter 代替 OpenPyXL（自动使用共享字符串表，兼容性更好）')
+    parser.add_argument('--prefer-openpyxl', action='store_true',
+                        help='优先使用 OpenPyXL 而非 XlsxWriter（用于需要读取XLSX文件的场景）')
 
     args = parser.parse_args()
 
     # 创建迁移工具
+    # 默认使用 XlsxWriter（更好的POI兼容性），除非指定 --prefer-openpyxl
+    use_xlsxwriter = not args.prefer_openpyxl and XLSXWRITER_AVAILABLE
     tool = JxlsMigrationTool(
         dry_run=args.dry_run,
         keep_extension=args.keep_extension,
         verbose=args.verbose,
-        use_xlsxwriter=args.use_xlsxwriter
+        use_xlsxwriter=use_xlsxwriter
     )
 
     try:
