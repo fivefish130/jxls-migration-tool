@@ -181,6 +181,13 @@ python jxls_migration_tool.py [OPTIONS] INPUT_PATH
 - Type: Boolean flag
 - Example: `python jxls_migration_tool.py input_dir --verbose`
 
+##### `--prefer-openpyxl`
+- Description: Prefer OpenPyXL over XlsxWriter for writing (for special scenarios)
+- Default: False (uses XlsxWriter by default for better POI compatibility)
+- Type: Boolean flag
+- Example: `python jxls_migration_tool.py input_dir --prefer-openpyxl`
+- Note: XlsxWriter automatically uses shared strings table, resulting in better compatibility with Apache POI 5.4.0+
+
 ### Option Combinations
 
 #### Common Use Cases
@@ -340,6 +347,90 @@ elif header.startswith(b'PK'):
 - **.xlsm** (Excel Macro-enabled Workbook) - *can read but macros not preserved*
 - **Password-protected files** - *cannot read*
 - **Corrupted files** - *will fail*
+
+## Read/Write Strategy
+
+### Unified Approach: OpenPyXL (Read) + XlsxWriter (Write)
+
+The tool uses a unified read/write strategy to provide the best performance and compatibility:
+
+| Operation | Recommended Tool | Reason |
+|-----------|------------------|--------|
+| **Reading** (.xls, .xlsx) | OpenPyXL | Supports both old .xls and new .xlsx formats, full-featured |
+| **Writing** (.xlsx) | XlsxWriter | Automatically uses shared strings table, smaller files, better POI compatibility |
+
+### Default Behavior
+
+- **Default**: Uses `XlsxWriter` for writing (automatic shared strings table)
+- **Optional**: Use `--prefer-openpyxl` to explicitly choose OpenPyXL for writing
+- **Reason**: XlsxWriter-written XLSX files have better compatibility with Apache POI 5.4.0+
+
+#### Example Usage
+
+```bash
+# Default: Uses XlsxWriter (recommended)
+python jxls_migration_tool.py input_dir
+
+# Explicitly use OpenPyXL
+python jxls_migration_tool.py input_dir --prefer-openpyxl
+```
+
+### Shared Strings Table Comparison
+
+| Feature | XlsxWriter | OpenPyXL (default) |
+|---------|-----------|--------------------|
+| Shared strings | ✅ Automatic | ❌ Inline strings |
+| POI 5.4.0+ compatibility | ✅ Excellent | ⚠️ May have issues |
+| File size | ✅ Smaller | ❌ Larger |
+| Performance | ✅ Faster | - |
+| Functionality | ✅ Complete | ✅ Complete |
+
+### Test Results
+
+```bash
+# XlsxWriter version (contains shared strings)
+unzip -l out/test_unified.xls | grep sharedStrings
+# Output: xl/sharedStrings.xml
+
+# OpenPyXL version (no shared strings)
+unzip -l out/test_openpyxl.xls | grep sharedStrings
+# Output: (no results)
+```
+
+### When to Use Each
+
+#### Use XlsxWriter (default) ✅
+- Production environment deployment
+- Integration with Apache POI 5.4.0+
+- Files containing大量 repeated text
+- Better performance and compatibility
+
+#### Use OpenPyXL (`--prefer-openpyxl`)
+- Need to read existing XLSX files
+- Rely on OpenPyXL-specific features
+- Backward compatibility requirements
+- Debugging and development scenarios
+
+### Dependency Management
+
+#### Required Dependencies
+```bash
+pip install openpyxl
+```
+
+#### Recommended Dependencies
+```bash
+# For .xls file support (optional)
+pip install 'xlrd<2.0'
+
+# For better compatibility (recommended)
+pip install xlsxwriter
+```
+
+#### xlrd Version Note
+- **xlrd < 2.0**: Supports .xls and .xlsx (recommended for .xls files)
+- **xlrd >= 2.0**: Only supports .xlsx (no longer supports .xls)
+- **Not installed**: Can still process .xlsx files, .xls files will prompt to install xlrd
 
 ## Report Generation
 

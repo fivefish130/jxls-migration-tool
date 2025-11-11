@@ -7,6 +7,50 @@
 
 ## [Unreleased]
 
+## [3.4.3] - 2025-11-11
+
+### 新增
+- **统一读写方法** - 采用 OpenPyXL 读取 + XlsxWriter 写入的策略
+  - 读取: 统一使用 OpenPyXL（支持 .xls 和 .xlsx）
+  - 写入: 默认使用 XlsxWriter（自动共享字符串表）
+  - 添加 `--prefer-openpyxl` 参数用于特殊场景
+  - 更好的 Apache POI 5.4.0+ 兼容性
+
+- **XlsxWriter 支持** - 新增 XlsxWriter 3.2.0+ 作为写入引擎
+  - 自动使用共享字符串表（xl/sharedStrings.xml）
+  - 文件更小，性能更好
+  - POI 兼容性显著提升
+  - 新增 XlsxWriterConverter 类处理格式转换
+
+### 改进
+- **默认行为优化**
+  - 默认使用 XlsxWriter（更优性能）
+  - 移除 `--use-xlsxwriter` 参数
+  - 新增 `--prefer-openpyxl` 参数（反向逻辑）
+  - 更好的开箱即用体验
+
+- **依赖管理**
+  - xlrd 改为可选依赖（仅用于 .xls 文件）
+  - xlrd 2.0+ 不再支持 .xls，自动提示安装 'xlrd<2.0'
+  - xlsxwriter 作为推荐依赖（更好的兼容性）
+
+### 技术细节
+- 读写分离: OpenPyXL(读) + XlsxWriter(写)
+- 共享字符串: XlsxWriter 自动 / OpenPyXL 内联
+- 格式转换: 新增 XlsxWriterConverter 类
+- 智能回退: xlsxwriter 不可用时自动使用 openpyxl
+
+### 测试验证
+- ✅ XlsxWriter 模式: 包含 xl/sharedStrings.xml
+- ✅ OpenPyXL 模式: 内联字符串
+- ✅ JXLS 转换: forEach→each, if(test→condition), out→${}
+- ✅ 模板变量: ${row.cate1Name} 等完整保留
+
+### 迁移指南
+- **生产环境**: 无需更改，享受更好兼容性
+- **开发环境**: 可使用 `--prefer-openpyxl` 便于调试
+- **CI/CD**: 使用默认 XlsxWriter 设置
+
 ## [3.4.2] - 2025-11-11
 
 ### 修复
