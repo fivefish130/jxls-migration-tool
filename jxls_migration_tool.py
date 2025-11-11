@@ -236,15 +236,8 @@ def detect_excel_format(file_path: str) -> Optional[str]:
 
             # XLSX文件头部: PK (ZIP格式)
             elif header[:2] == b'PK':
-                # 进一步验证是否是有效的XLSX
-                try:
-                    # 尝试用openpyxl打开验证
-                    temp_wb = load_workbook(file_path, read_only=True)
-                    temp_wb.close()
-                    return 'xlsx'
-                except Exception:
-                    # 可能是损坏的xlsx或其他ZIP文件
-                    return 'xls'
+                # PK 头部说明是 ZIP 格式，大概率是 .xlsx
+                return 'xlsx'
 
             else:
                 return None
@@ -1059,6 +1052,7 @@ class JxlsMigrationTool:
     def detect_file_jxls_version(self, file_path: str) -> str:
         """
         检测整个文件的 JXLS 版本
+        优先使用 openpyxl（支持注释检测），兼容 xlrd
 
         Args:
             file_path: Excel文件路径
@@ -1066,39 +1060,75 @@ class JxlsMigrationTool:
         Returns:
             str: 'jxls1', 'jxls2', 或 'none'
         """
-        detected_format = safe_detect_excel_format(file_path, self.logger)
+        import tempfile
+        import shutil
 
-        if detected_format == 'xlsx':
-            # 使用 openpyxl 检测 XLSX 文件
+        # 优先使用 openpyxl 检测（支持Excel注释，JXLS 2.x指令存储在注释中）
+        # 首先检测文件真实格式，不依赖扩展名
+        actual_format = detect_excel_format(file_path)
+        self.logger.debug(f"  实际文件格式: {actual_format}")
+
+        if actual_format == 'xlsx' or actual_format is None:
+            # 如果是 .xlsx 格式但扩展名是 .xls，需要创建临时文件
+            test_file = file_path
+            temp_file = None
+
             try:
-                wb = load_workbook(file_path)
-                has_jxls1 = False
-                has_jxls2 = False
+                from pathlib import Path
+                if Path(file_path).suffix.lower() == '.xls':
+                    # 创建临时 .xlsx 文件供 openpyxl 打开
+                    self.logger.debug(f"  创建临时 .xlsx 文件用于检测...")
+                    fd, temp_file = tempfile.mkstemp(suffix='.xlsx')
+                    os.close(fd)
+                    shutil.copy2(file_path, temp_file)
+                    test_file = temp_file
 
-                for ws in wb.worksheets:
-                    jxls_version = self.detect_jxls_version_xlsx(ws)
-                    if jxls_version == 'jxls1':
-                        has_jxls1 = True
-                    elif jxls_version == 'jxls2':
-                        has_jxls2 = True
+                # 尝试使用 openpyxl 检测
+                try:
+                    self.logger.debug(f"  使用 openpyxl 检测 JXLS 版本...")
+                    wb = load_workbook(test_file, data_only=True)
+                    has_jxls1 = False
+                    has_jxls2 = False
 
-                wb.close()
+                    for ws in wb.worksheets:
+                        jxls_version = self.detect_jxls_version_xlsx(ws)
+                        self.logger.debug(f"    工作表 '{ws.title}' JXLS版本: {jxls_version}")
+                        if jxls_version == 'jxls1':
+                            has_jxls1 = True
+                        elif jxls_version == 'jxls2':
+                            has_jxls2 = True
 
-                if has_jxls1:
-                    return 'jxls1'
-                elif has_jxls2:
-                    return 'jxls2'
-                else:
-                    return 'none'
+                    wb.close()
+
+                    self.logger.debug(f"  检测结果: has_jxls1={has_jxls1}, has_jxls2={has_jxls2}")
+                    if has_jxls1:
+                        return 'jxls1'
+                    elif has_jxls2:
+                        return 'jxls2'
+                    else:
+                        return 'none'
+                except Exception as e:
+                    self.logger.debug(f"  openpyxl 检测失败: {e}")
+                finally:
+                    # 清理临时文件
+                    if temp_file and os.path.exists(temp_file):
+                        try:
+                            os.remove(temp_file)
+                        except PermissionError:
+                            # 文件可能被Excel进程占用，忽略错误
+                            pass
             except Exception as e:
-                self.logger.debug(f"  检测 XLSX 文件 JXLS 版本失败: {e}")
-                return 'none'
-        else:
-            # 使用 xlrd 检测 XLS 文件
-            if not XLRD_AVAILABLE:
-                return 'none'
+                self.logger.debug(f"  创建临时文件失败: {e}")
+                if temp_file and os.path.exists(temp_file):
+                    try:
+                        os.remove(temp_file)
+                    except PermissionError:
+                        pass
 
+        # 如果 openpyxl 失败或文件是真正的 .xls 格式，尝试 xlrd
+        if XLRD_AVAILABLE:
             try:
+                self.logger.debug(f"  使用 xlrd 检测 JXLS 版本...")
                 xls_book = xlrd.open_workbook(file_path)
                 has_jxls1 = False
                 has_jxls2 = False
@@ -1118,8 +1148,9 @@ class JxlsMigrationTool:
                 else:
                     return 'none'
             except Exception as e:
-                self.logger.debug(f"  检测 XLS 文件 JXLS 版本失败: {e}")
-                return 'none'
+                self.logger.debug(f"  xlrd 检测失败: {e}")
+
+        return 'none'
 
     def migrate_directory(self, input_dir: str, output_dir: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -1412,7 +1443,66 @@ class JxlsMigrationTool:
         }
 
         try:
-            # 读取XLS文件
+            # 读取XLS文件前，先检查JXLS版本
+            # 对 .xls 文件（可能是 .xlsx 格式但 .xls 扩展名），优先使用 openpyxl 检测
+            self.logger.debug(f"检查 XLS 文件 JXLS 版本...")
+            actual_format = detect_excel_format(xls_path)
+
+            if actual_format == 'xlsx' or actual_format is None:
+                # 可能是 .xlsx 格式（.xls 扩展名但实际是 xlsx），尝试 openpyxl
+                try:
+                    # 如果是 .xlsx 格式但扩展名是 .xls，需要创建临时文件
+                    test_file = xls_path
+                    temp_file = None
+
+                    try:
+                        from pathlib import Path
+                        if Path(xls_path).suffix.lower() == '.xls':
+                            # 创建临时 .xlsx 文件供 openpyxl 打开
+                            self.logger.debug(f"  创建临时 .xlsx 文件用于检测...")
+                            import tempfile
+                            import shutil
+                            fd, temp_file = tempfile.mkstemp(suffix='.xlsx')
+                            os.close(fd)
+                            shutil.copy2(xls_path, temp_file)
+                            test_file = temp_file
+
+                        from openpyxl import load_workbook
+                        self.logger.debug(f"  尝试使用 openpyxl 检测...")
+                        wb = load_workbook(test_file, data_only=True)
+                        has_jxls2 = False
+                        for ws in wb.worksheets:
+                            if self.detect_jxls_version_xlsx(ws) == 'jxls2':
+                                has_jxls2 = True
+                                break
+                        wb.close()
+
+                        if temp_file and os.path.exists(temp_file):
+                            os.remove(temp_file)
+
+                        if has_jxls2:
+                            # JXLS 2.x 格式，直接复制文件（保持原样）
+                            self.logger.info(f"  ℹ️ 检测到 JXLS 2.x 格式，直接复制文件（保持原样）")
+                            if not self.dry_run:
+                                import shutil
+                                shutil.copy2(xls_path, xlsx_path)
+                                self.logger.info(f"  ✅ 复制完成（未修改）")
+                            else:
+                                self.logger.info(f"  ✅ 试运行：文件将保持不变（未修改）")
+                            result['success'] = True
+                            result['converted_commands'] = 0
+                            return result
+                    except Exception as e:
+                        self.logger.debug(f"  检测过程出错: {e}")
+                        if temp_file and os.path.exists(temp_file):
+                            try:
+                                os.remove(temp_file)
+                            except PermissionError:
+                                pass
+                except Exception as e:
+                    self.logger.debug(f"  openpyxl 检测失败: {e}")
+
+            # 继续正常的 XLS 处理流程
             self.logger.debug(f"读取XLS文件: {xls_path}")
             xls_book = xlrd.open_workbook(xls_path, formatting_info=True)
 
@@ -1544,6 +1634,24 @@ class JxlsMigrationTool:
 
         temp_file = None
         try:
+            # 首先检查整个文件是否已经是 JXLS 2.x 格式
+            self.logger.debug(f"  检查 XLSX 文件 JXLS 版本...")
+            jxls_version = self.detect_file_jxls_version(xlsx_path)
+            self.logger.debug(f"  检测到 JXLS 版本: {jxls_version}")
+
+            if jxls_version == 'jxls2':
+                # JXLS 2.x 格式，直接复制文件
+                self.logger.info(f"  ℹ️ 检测到 JXLS 2.x 格式，直接复制文件（保持原样）")
+                if not self.dry_run:
+                    import shutil
+                    shutil.copy2(xlsx_path, output_path)
+                    self.logger.info(f"  ✅ 复制完成（未修改）")
+                else:
+                    self.logger.info(f"  ✅ 试运行：文件将保持不变（未修改）")
+                result['success'] = True
+                result['converted_commands'] = 0
+                return result
+
             # 处理文件后缀与实际格式不匹配的情况
             input_path_obj = Path(xlsx_path)
             if input_path_obj.suffix.lower() == '.xls':
@@ -1810,7 +1918,8 @@ class JxlsMigrationTool:
                             has_jxls2_text = True
 
                 # 检测2.x注释 (在openpyxl中，注释在 cell.comment 中)
-                if cell.comment and cell.comment.text:
+                # 注意: read_only=True 时，ReadOnlyCell 没有 comment 属性
+                if hasattr(cell, 'comment') and cell.comment and cell.comment.text:
                     comment_text = str(cell.comment.text)
                     if 'jx:each' in comment_text or 'jx:if(condition=' in comment_text or 'jx:area' in comment_text:
                         has_jxls2_comments = True
