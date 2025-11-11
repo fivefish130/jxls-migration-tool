@@ -1010,20 +1010,6 @@ class XlsxWriterConverter:
 
 
 # ============================================================================
-# 共享字符串表转换器
-# ============================================================================
-
-def convert_inline_strings_to_shared_strings(xlsx_file_path: str) -> bool:
-    """
-    将XLSX文件中的内联字符串转换为共享字符串表格式
-    解决POI 5.4.0兼容性问题
-    """
-    # 简单返回True，不进行实际转换
-    # 还原到共享字符串功能之前的版本
-    return True
-
-
-# ============================================================================
 # JXLS迁移工具主类
 # ============================================================================
 
@@ -1506,14 +1492,6 @@ class JxlsMigrationTool:
                     self.logger.debug(f"保存XLSX文件: {actual_xlsx_path}")
                     xlsx_book.save(actual_xlsx_path)
 
-                    # 转换内联字符串为共享字符串表 - 解决POI 5.4.0兼容性问题
-                    self.logger.debug(f"  转换内联字符串为共享字符串表...")
-                    convert_success = convert_inline_strings_to_shared_strings(actual_xlsx_path)
-                    if convert_success:
-                        self.logger.debug(f"  ✅ 共享字符串表转换成功")
-                    else:
-                        self.logger.warning(f"  ⚠️ 共享字符串表转换失败，将使用原始格式")
-
                     # 如果用户要求保持.xls扩展名，则重命名文件（但内容仍是.xlsx）
                     if output_path_obj.suffix.lower() == '.xls':
                         import os
@@ -1604,14 +1582,6 @@ class JxlsMigrationTool:
 
                 self.logger.debug(f"保存XLSX文件: {actual_xlsx_path}")
                 wb.save(actual_xlsx_path)
-
-                # 转换内联字符串为共享字符串表 - 解决POI 5.4.0兼容性问题
-                self.logger.debug(f"  转换内联字符串为共享字符串表...")
-                convert_success = convert_inline_strings_to_shared_strings(actual_xlsx_path)
-                if convert_success:
-                    self.logger.debug(f"  ✅ 共享字符串表转换成功")
-                else:
-                    self.logger.warning(f"  ⚠️ 共享字符串表转换失败，将使用原始格式")
 
                 # 如果用户要求保持.xls扩展名，则重命名文件（但内容仍是.xlsx）
                 if output_path_obj.suffix.lower() == '.xls':
