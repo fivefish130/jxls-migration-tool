@@ -1069,6 +1069,71 @@ class JxlsMigrationTool:
         # 失败的文件及原因
         self.failures = []
 
+    def detect_file_jxls_version(self, file_path: str) -> str:
+        """
+        检测整个文件的 JXLS 版本
+
+        Args:
+            file_path: Excel文件路径
+
+        Returns:
+            str: 'jxls1', 'jxls2', 或 'none'
+        """
+        detected_format = safe_detect_excel_format(file_path, self.logger)
+
+        if detected_format == 'xlsx':
+            # 使用 openpyxl 检测 XLSX 文件
+            try:
+                wb = load_workbook(file_path)
+                has_jxls1 = False
+                has_jxls2 = False
+
+                for ws in wb.worksheets:
+                    jxls_version = self.detect_jxls_version_xlsx(ws)
+                    if jxls_version == 'jxls1':
+                        has_jxls1 = True
+                    elif jxls_version == 'jxls2':
+                        has_jxls2 = True
+
+                wb.close()
+
+                if has_jxls1:
+                    return 'jxls1'
+                elif has_jxls2:
+                    return 'jxls2'
+                else:
+                    return 'none'
+            except Exception as e:
+                self.logger.debug(f"  检测 XLSX 文件 JXLS 版本失败: {e}")
+                return 'none'
+        else:
+            # 使用 xlrd 检测 XLS 文件
+            if not XLRD_AVAILABLE:
+                return 'none'
+
+            try:
+                xls_book = xlrd.open_workbook(file_path)
+                has_jxls1 = False
+                has_jxls2 = False
+
+                for sheet_idx in range(xls_book.nsheets):
+                    xls_sheet = xls_book.sheet_by_index(sheet_idx)
+                    jxls_version = self.detect_jxls_version(xls_sheet)
+                    if jxls_version == 'jxls1':
+                        has_jxls1 = True
+                    elif jxls_version == 'jxls2':
+                        has_jxls2 = True
+
+                if has_jxls1:
+                    return 'jxls1'
+                elif has_jxls2:
+                    return 'jxls2'
+                else:
+                    return 'none'
+            except Exception as e:
+                self.logger.debug(f"  检测 XLS 文件 JXLS 版本失败: {e}")
+                return 'none'
+
     def migrate_directory(self, input_dir: str, output_dir: Optional[str] = None) -> Dict[str, Any]:
         """
         迁移整个目录下的所有Excel文件
@@ -1256,6 +1321,30 @@ class JxlsMigrationTool:
             'error': None,
             'attempts': []
         }
+
+        # 首先检查整个文件是否已经是 JXLS 2.x 格式
+        self.logger.info(f"  检查 JXLS 版本...")
+        jxls_version = self.detect_file_jxls_version(input_path)
+        self.logger.info(f"  检测到 JXLS 版本: {jxls_version}")
+
+        if jxls_version == 'jxls2':
+            # JXLS 2.x 格式，直接复制文件
+            import shutil
+            try:
+                self.logger.info(f"  ℹ️ 检测到 JXLS 2.x 格式，直接复制文件（保持原样）")
+                if not self.dry_run:
+                    shutil.copy2(input_path, output_path)
+                    self.logger.info(f"  ✅ 复制完成（未修改）")
+                else:
+                    self.logger.info(f"  ✅ 试运行：文件将保持不变（未修改）")
+                result['success'] = True
+                result['converted_commands'] = 0
+                result['attempts'].append(f"直接复制: JXLS 2.x 格式")
+                return result
+            except Exception as e:
+                result['error'] = f"复制文件失败: {str(e)}"
+                self.logger.error(f"  ❌ {result['error']}")
+                return result
 
         # 第一次尝试：根据检测的格式处理
         detected_format = safe_detect_excel_format(input_path, self.logger)
