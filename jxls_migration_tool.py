@@ -1581,6 +1581,30 @@ class JxlsMigrationTool:
             # 创建新的sheet
             xlsx_sheet = xlsx_book.create_sheet(title=sheet_name)
 
+            # 检测JXLS版本
+            jxls_version = self.detect_jxls_version(xls_sheet)
+            self.logger.debug(f"    检测到JXLS版本: {jxls_version}")
+
+            if jxls_version == 'jxls2':
+                # JXLS 2.x 格式，直接复制（不重新处理）
+                self.logger.info(f"    ℹ️ 检测到 JXLS 2.x 格式，直接复制（保持原样）")
+                # 简单复制数据（不处理命令）
+                for row_idx in range(xls_sheet.nrows):
+                    for col_idx in range(xls_sheet.ncols):
+                        xls_cell = xls_sheet.cell(row_idx, col_idx)
+                        if xls_cell.value is not None:
+                            xlsx_cell = xlsx_sheet.cell(row=row_idx + 1, column=col_idx + 1)
+                            xlsx_cell.value = xls_cell.value
+                            # 尝试复制格式
+                            try:
+                                ExcelFormatConverter.copy_cell_format(xls_cell, xls_book, xlsx_cell)
+                            except:
+                                pass  # 忽略格式复制错误
+                result['success'] = True
+                result['converted_commands'] = 0
+                self.logger.info(f"    ✅ 复制完成（未修改）")
+                return result
+
             # 检测JXLS指令
             commands = self.detect_jxls_commands(xls_sheet, sheet_name)
             result['total_commands'] = len(commands)
@@ -1644,6 +1668,24 @@ class JxlsMigrationTool:
             # 创建新的sheet
             xlsx_sheet = xlsx_workbook.add_worksheet(sheet_name)
 
+            # 检测JXLS版本
+            jxls_version = self.detect_jxls_version(xls_sheet)
+            self.logger.debug(f"    检测到JXLS版本: {jxls_version}")
+
+            if jxls_version == 'jxls2':
+                # JXLS 2.x 格式，直接复制（不重新处理）
+                self.logger.info(f"    ℹ️ 检测到 JXLS 2.x 格式，直接复制（保持原样）")
+                # 简单复制数据（不处理命令）
+                for row_idx in range(xls_sheet.nrows):
+                    for col_idx in range(xls_sheet.ncols):
+                        xls_cell = xls_sheet.cell(row_idx, col_idx)
+                        if xls_cell.value is not None:
+                            xlsx_sheet.write(row_idx, col_idx, str(xls_cell.value))
+                result['success'] = True
+                result['converted_commands'] = 0
+                self.logger.info(f"    ✅ 复制完成（未修改）")
+                return result
+
             # 检测JXLS指令
             commands = self.detect_jxls_commands(xls_sheet, sheet_name)
             result['total_commands'] = len(commands)
@@ -1679,6 +1721,47 @@ class JxlsMigrationTool:
 
         return result
 
+    def detect_jxls_version_xlsx(self, ws: Worksheet) -> str:
+        """
+        检测XLSX Sheet中的JXLS版本 - 检查注释和单元格值
+
+        Args:
+            ws: openpyxl的Worksheet对象
+
+        Returns:
+            str: 'jxls1', 'jxls2', 或 'none'
+        """
+        has_jxls1_tags = False
+        has_jxls2_comments = False
+        has_jxls2_text = False  # 新增：检测单元格值中的 2.x 格式
+
+        for row in ws.iter_rows():
+            for cell in row:
+                # 检测1.x标签 (出现在单元格文本中，且是XML标签格式)
+                if cell.value:
+                    value = str(cell.value).strip()
+                    # 1.x 标签是 XML 标签格式，以 < 开头
+                    if value.startswith('<jx:') and not value.startswith('<!--'):
+                        has_jxls1_tags = True
+                    # 检测2.x格式的指令（作为单元格值）
+                    elif value.startswith('jx:') and not value.startswith('jx:out'):
+                        # 2.x 格式的指令以 jx: 开头但不是 XML 标签格式
+                        if 'jx:each(' in value or 'jx:if(condition=' in value or 'jx:area(' in value:
+                            has_jxls2_text = True
+
+                # 检测2.x注释 (在openpyxl中，注释在 cell.comment 中)
+                if cell.comment and cell.comment.text:
+                    comment_text = str(cell.comment.text)
+                    if 'jx:each' in comment_text or 'jx:if(condition=' in comment_text or 'jx:area' in comment_text:
+                        has_jxls2_comments = True
+
+        if has_jxls1_tags:
+            return 'jxls1'
+        elif has_jxls2_comments or has_jxls2_text:
+            return 'jxls2'
+        else:
+            return 'none'
+
     def migrate_xlsx_sheet(self, ws: Worksheet) -> Dict[str, Any]:
         """
         迁移XLSX格式的单个Sheet
@@ -1702,6 +1785,18 @@ class JxlsMigrationTool:
         }
 
         try:
+            # 检测JXLS版本
+            jxls_version = self.detect_jxls_version_xlsx(ws)
+            self.logger.debug(f"    检测到JXLS版本: {jxls_version}")
+
+            if jxls_version == 'jxls2':
+                # JXLS 2.x 格式，直接复制（不重新处理）
+                self.logger.info(f"    ℹ️ 检测到 JXLS 2.x 格式，直接复制（保持原样）")
+                result['success'] = True
+                result['converted_commands'] = 0
+                self.logger.info(f"    ✅ 复制完成（未修改）")
+                return result
+
             # 检测JXLS指令
             commands = self.detect_jxls_commands_xlsx(ws, sheet_name)
             result['total_commands'] = len(commands)
@@ -1722,6 +1817,43 @@ class JxlsMigrationTool:
             self.logger.debug(traceback.format_exc())
 
         return result
+
+    def detect_jxls_version(self, xls_sheet) -> str:
+        """
+        检测JXLS版本 - 区分1.x和2.x格式
+
+        Args:
+            xls_sheet: xlrd的Sheet对象
+
+        Returns:
+            str: 'jxls1', 'jxls2', 或 'none'
+        """
+        has_jxls1_tags = False
+        has_jxls2_comments = False
+
+        for row_idx in range(xls_sheet.nrows):
+            for col_idx in range(xls_sheet.ncols):
+                cell = xls_sheet.cell(row_idx, col_idx)
+                if cell.value:
+                    value = str(cell.value).strip()
+
+                    # 检测1.x标签 (出现在单元格文本中，且是XML标签格式)
+                    # 1.x 标签是 XML 标签格式，以 < 开头
+                    if value.lower().startswith('<jx:') and not value.lower().startswith('<!--'):
+                        has_jxls1_tags = True
+
+                    # 检测2.x注释 (在openpyxl中会是注释，但我们现在检查单元格值)
+                    # 注意：xlrd读取时，注释不会作为单元格值，所以我们需要检查格式信息
+                    # 这里我们暂时通过检查是否包含2.x格式的文本模式
+                    if 'jx:each(' in value or 'jx:if(condition=' in value:
+                        has_jxls2_comments = True
+
+        if has_jxls1_tags:
+            return 'jxls1'
+        elif has_jxls2_comments:
+            return 'jxls2'
+        else:
+            return 'none'
 
     def detect_jxls_commands(self, xls_sheet, sheet_name: str) -> List[JxlsCommand]:
         """
@@ -1777,7 +1909,7 @@ class JxlsMigrationTool:
 
     def detect_jxls_commands_xlsx(self, ws: Worksheet, sheet_name: str) -> List[JxlsCommand]:
         """
-        检测XLSX Sheet中的JXLS命令 - 修复版本
+        检测XLSX Sheet中的JXLS命令 - 只检测1.x的XML标签格式
 
         Args:
             ws: openpyxl的Worksheet对象
@@ -1794,35 +1926,37 @@ class JxlsMigrationTool:
                     value = str(cell.value).strip()
                     location = CommandLocation(row_idx, col_idx, sheet_name)
 
-                    # 检测area - 更宽松的匹配
-                    if 'jx:area' in value.lower() and not value.startswith('/'):
-                        cmd = AreaCommand(location, value)
-                        commands.append(cmd)
-                        self.logger.debug(f"      检测到area命令: {value}")
+                    # 只检测1.x的XML标签格式（以 < 开头）
+                    if value.startswith('<jx:'):
+                        # 检测area - 更宽松的匹配
+                        if 'jx:area' in value.lower() and not value.startswith('/'):
+                            cmd = AreaCommand(location, value)
+                            commands.append(cmd)
+                            self.logger.debug(f"      检测到area命令: {value}")
 
-                    # 检测forEach - 更宽松的匹配
-                    elif 'jx:foreach' in value.lower() and not value.startswith('/'):
-                        cmd = ForEachCommand(location, value)
-                        commands.append(cmd)
-                        self.logger.debug(f"      检测到forEach命令: {value}")
+                        # 检测forEach - 更宽松的匹配
+                        elif 'jx:foreach' in value.lower() and not value.startswith('/'):
+                            cmd = ForEachCommand(location, value)
+                            commands.append(cmd)
+                            self.logger.debug(f"      检测到forEach命令: {value}")
 
-                    # 检测if - 更宽松的匹配
-                    elif 'jx:if' in value.lower() and not value.startswith('/'):
-                        cmd = IfCommand(location, value)
-                        commands.append(cmd)
-                        self.logger.debug(f"      检测到if命令: {value}")
+                        # 检测if - 更宽松的匹配
+                        elif 'jx:if' in value.lower() and not value.startswith('/'):
+                            cmd = IfCommand(location, value)
+                            commands.append(cmd)
+                            self.logger.debug(f"      检测到if命令: {value}")
 
-                    # 检测multiSheet - 更宽松的匹配
-                    elif 'jx:multisheet' in value.lower() and not value.startswith('/'):
-                        cmd = MultiSheetCommand(location, value)
-                        commands.append(cmd)
-                        self.logger.debug(f"      检测到multiSheet命令: {value}")
+                        # 检测multiSheet - 更宽松的匹配
+                        elif 'jx:multisheet' in value.lower() and not value.startswith('/'):
+                            cmd = MultiSheetCommand(location, value)
+                            commands.append(cmd)
+                            self.logger.debug(f"      检测到multiSheet命令: {value}")
 
-                    # 检测out (单独单元格中的jx:out)
-                    elif '<jx:out' in value.lower() or 'jx:out(' in value.lower():
-                        cmd = OutCommand(location, value)
-                        commands.append(cmd)
-                        self.logger.debug(f"      检测到out命令: {value}")
+                        # 检测out (单独单元格中的jx:out)
+                        elif '<jx:out' in value.lower() or 'jx:out(' in value.lower():
+                            cmd = OutCommand(location, value)
+                            commands.append(cmd)
+                            self.logger.debug(f"      检测到out命令: {value}")
 
         return commands
 
