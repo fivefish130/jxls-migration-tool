@@ -1715,41 +1715,88 @@ class JxlsMigrationTool:
             total_commands = 0
             converted_commands = 0
 
-            # 处理每个sheet
-            for sheet_name in wb.sheetnames:
-                ws = wb[sheet_name]
-                sheet_result = self.migrate_xlsx_sheet(ws)
-                result['sheets'].append(sheet_result)
-                result['changes'].extend(sheet_result['changes'])
-                total_commands += sheet_result.get('total_commands', 0)
-                converted_commands += sheet_result.get('converted_commands', 0)
-
-            result['total_commands'] = total_commands
-            result['converted_commands'] = converted_commands
-
-            # 保存文件
-            if not self.dry_run:
-                # 始终保存为.xlsx格式，然后重命名
+            if self.use_xlsxwriter:
+                # 使用 XlsxWriter（自动共享字符串表，避免富文本问题）
+                self.logger.debug(f"使用 XlsxWriter 写入文件")
                 output_path_obj = Path(output_path)
                 actual_xlsx_path = str(output_path_obj.with_suffix('.xlsx'))
 
-                self.logger.debug(f"保存XLSX文件: {actual_xlsx_path}")
-                wb.save(actual_xlsx_path)
+                # 创建 xlsxwriter 工作簿
+                xlsx_workbook = xlsxwriter.Workbook(actual_xlsx_path, {'strings_to_formulas': False})
 
-                # 如果用户要求保持.xls扩展名，则重命名文件（但内容仍是.xlsx）
-                if output_path_obj.suffix.lower() == '.xls':
-                    import os
-                    import shutil
-                    # 删除旧文件（如果存在）
-                    if os.path.exists(output_path):
-                        os.remove(output_path)
-                    # 重命名为用户期望的扩展名
-                    shutil.move(actual_xlsx_path, output_path)
-                    self.logger.info(f"  已保存: {output_path} (内容为.xlsx格式)")
-                else:
-                    self.logger.info(f"  已保存: {output_path}")
+                # 处理每个sheet
+                for sheet_name in wb.sheetnames:
+                    ws = wb[sheet_name]
+                    sheet_result = self.migrate_xlsx_sheet_xlsxwriter(ws, xlsx_workbook)
+                    result['sheets'].append(sheet_result)
+                    result['changes'].extend(sheet_result['changes'])
+                    total_commands += sheet_result.get('total_commands', 0)
+                    converted_commands += sheet_result.get('converted_commands', 0)
 
-            result['success'] = True
+                result['total_commands'] = total_commands
+                result['converted_commands'] = converted_commands
+
+                # 关闭 openpyxl 工作簿
+                wb.close()
+
+                # 保存文件
+                if not self.dry_run:
+                    self.logger.debug(f"保存XLSX文件: {actual_xlsx_path}")
+                    xlsx_workbook.close()  # xlsxwriter 需要显式关闭
+
+                    # 如果用户要求保持.xls扩展名，则重命名文件（但内容仍是.xlsx）
+                    if output_path_obj.suffix.lower() == '.xls':
+                        import os
+                        import shutil
+                        # 删除旧文件（如果存在）
+                        if os.path.exists(output_path):
+                            os.remove(output_path)
+                        # 重命名为用户期望的扩展名
+                        shutil.move(actual_xlsx_path, output_path)
+                        self.logger.info(f"  已保存: {output_path} (内容为.xlsx格式，使用XlsxWriter)")
+                    else:
+                        self.logger.info(f"  已保存: {output_path} (使用XlsxWriter)")
+
+                result['success'] = True
+            else:
+                # 使用 OpenPyXL（默认）
+                self.logger.debug(f"使用 OpenPyXL 写入文件")
+
+                # 处理每个sheet
+                for sheet_name in wb.sheetnames:
+                    ws = wb[sheet_name]
+                    sheet_result = self.migrate_xlsx_sheet(ws)
+                    result['sheets'].append(sheet_result)
+                    result['changes'].extend(sheet_result['changes'])
+                    total_commands += sheet_result.get('total_commands', 0)
+                    converted_commands += sheet_result.get('converted_commands', 0)
+
+                result['total_commands'] = total_commands
+                result['converted_commands'] = converted_commands
+
+                # 保存文件
+                if not self.dry_run:
+                    # 始终保存为.xlsx格式，然后重命名
+                    output_path_obj = Path(output_path)
+                    actual_xlsx_path = str(output_path_obj.with_suffix('.xlsx'))
+
+                    self.logger.debug(f"保存XLSX文件: {actual_xlsx_path}")
+                    wb.save(actual_xlsx_path)
+
+                    # 如果用户要求保持.xls扩展名，则重命名文件（但内容仍是.xlsx）
+                    if output_path_obj.suffix.lower() == '.xls':
+                        import os
+                        import shutil
+                        # 删除旧文件（如果存在）
+                        if os.path.exists(output_path):
+                            os.remove(output_path)
+                        # 重命名为用户期望的扩展名
+                        shutil.move(actual_xlsx_path, output_path)
+                        self.logger.info(f"  已保存: {output_path} (内容为.xlsx格式)")
+                    else:
+                        self.logger.info(f"  已保存: {output_path}")
+
+                result['success'] = True
 
         except Exception as e:
             result['error'] = f"{type(e).__name__}: {str(e)}"
@@ -1912,6 +1959,85 @@ class JxlsMigrationTool:
             # 处理命令并迁移数据
             conversion_result = self.process_commands_and_migrate_data_xlsxwriter(
                 commands, xls_sheet, xls_book, xlsx_sheet
+            )
+
+            result['changes'].extend(conversion_result['changes'])
+            result['converted_commands'] = conversion_result['converted_commands']
+            result['success'] = True
+
+            self.logger.info(f"    转换 {conversion_result['converted_commands']} 个命令")
+
+            # 检查是否成功添加了注释
+            if conversion_result['converted_commands'] > 0:
+                self.logger.info(f"    ✅ 成功转换命令")
+            else:
+                self.logger.warning(f"    ⚠️ 未转换任何命令")
+
+        except Exception as e:
+            result['error'] = f"{type(e).__name__}: {str(e)}"
+            self.logger.error(f"    Sheet迁移失败: {result['error']}")
+            self.logger.debug(traceback.format_exc())
+
+        return result
+
+    def migrate_xlsx_sheet_xlsxwriter(self, ws: Worksheet, xlsx_workbook) -> Dict[str, Any]:
+        """
+        使用 XlsxWriter 迁移 XLSX 格式的单个 Sheet - 自动使用共享字符串表，避免富文本问题
+
+        Args:
+            ws: openpyxl 的 Worksheet 对象
+            xlsx_workbook: xlsxwriter 的 Workbook 对象
+
+        Returns:
+            Sheet迁移结果字典
+        """
+        sheet_name = ws.title
+        self.logger.info(f"  Sheet: {sheet_name}")
+
+        result = {
+            'name': sheet_name,
+            'success': False,
+            'changes': [],
+            'total_commands': 0,
+            'converted_commands': 0,
+            'error': None
+        }
+
+        try:
+            # 创建新的sheet
+            xlsx_sheet = xlsx_workbook.add_worksheet(sheet_name)
+
+            # 检测JXLS版本
+            jxls_version = self.detect_jxls_version_xlsx(ws)
+            self.logger.debug(f"    检测到JXLS版本: {jxls_version}")
+
+            if jxls_version == 'jxls2':
+                # JXLS 2.x 格式，直接复制（不重新处理）
+                self.logger.info(f"    ℹ️ 检测到 JXLS 2.x 格式，直接复制（保持原样）")
+                # 简单复制数据（不处理命令）
+                for row_idx, row in enumerate(ws.iter_rows()):
+                    for col_idx, cell in enumerate(row):
+                        if cell.value is not None:
+                            xlsx_sheet.write(row_idx, col_idx, str(cell.value))
+                result['success'] = True
+                result['converted_commands'] = 0
+                self.logger.info(f"    ✅ 复制完成（未修改）")
+                return result
+
+            # 检测JXLS指令
+            commands = self.detect_jxls_commands_xlsx(ws, sheet_name)
+            result['total_commands'] = len(commands)
+            self.logger.info(f"    发现 {len(commands)} 个JXLS命令")
+
+            if commands:
+                self.logger.debug(f"    命令详情:")
+                for cmd in commands:
+                    self.logger.debug(
+                        f"      - {type(cmd).__name__}: row={cmd.location.row}, text={cmd.raw_text[:50]}...")
+
+            # 处理命令并迁移数据
+            conversion_result = self.process_commands_and_migrate_data_xlsxwriter_from_xlsx(
+                commands, ws, xlsx_sheet
             )
 
             result['changes'].extend(conversion_result['changes'])
@@ -2739,6 +2865,281 @@ class JxlsMigrationTool:
                 # xlsxwriter 使用 0-based 索引
                 xlsx_sheet.write_comment(actual_row - 1, col, comment_text)
                 self.logger.debug(f"      添加注释到 {get_column_letter(col + 1)}{actual_row}: {comment_text}")
+            except Exception as e:
+                self.logger.debug(f"      添加注释失败 row={row + 1}, col={col + 1}: {e}")
+
+        return result
+
+    def process_commands_and_migrate_data_xlsxwriter_from_xlsx(self, commands: List[JxlsCommand],
+                                                                ws: Worksheet,
+                                                                xlsx_sheet) -> Dict[str, Any]:
+        """
+        处理从 openpyxl worksheet 读取的命令并用 xlsxwriter 迁移数据 - 自动使用共享字符串表，避免富文本问题
+
+        Args:
+            commands: JXLS命令列表
+            ws: openpyxl的Worksheet对象
+            xlsx_sheet: xlsxwriter的Worksheet对象
+
+        Returns:
+            处理结果字典
+        """
+        result = {
+            'changes': [],
+            'converted_commands': 0
+        }
+
+        # 标记需要删除的行
+        rows_to_delete = set()
+        comments_to_add = []  # (row, col, comment_text)
+        area_commands = []
+
+        self.logger.debug(f"      开始处理 {len(commands)} 个命令")
+
+        # 处理每个命令
+        for cmd in commands:
+            self.logger.debug(f"      处理命令: {type(cmd).__name__} at row {cmd.location.row}")
+
+            if isinstance(cmd, ForEachCommand):
+                self.logger.debug(f"      处理forEach命令: {cmd.raw_text}")
+                end_row = self.find_end_tag_xlsx(ws, cmd.location.row, '/jx:forEach')
+                self.logger.debug(f"      找到结束标签位置: {end_row}")
+
+                if end_row is not None:
+                    cmd.end_location = CommandLocation(end_row, cmd.location.col, cmd.location.sheet_name)
+                    cmd.data_location = CommandLocation(cmd.location.row + 1, cmd.location.col, cmd.location.sheet_name)
+
+                    rows_to_delete.add(cmd.location.row)
+                    rows_to_delete.add(end_row)
+
+                    self.logger.debug(f"      标记删除行: {cmd.location.row}, {end_row}")
+
+                    # 计算lastCell
+                    last_col = self.find_last_data_column_xlsx(ws, cmd.data_location.row)
+                    self.logger.debug(f"      最后数据列: {last_col}")
+
+                    # 计算调整后的数据行号
+                    adjusted_data_row = cmd.data_location.row - len(
+                        [r for r in rows_to_delete if r < cmd.data_location.row])
+                    last_cell = f"{get_column_letter(last_col)}{adjusted_data_row + 1}"
+
+                    self.logger.debug(f"      调整后数据行: {adjusted_data_row}, lastCell: {last_cell}")
+
+                    comment_text = cmd.to_jx_each(last_cell)
+
+                    # 修复：找到数据行的第一个有数据的列
+                    first_data_col = self.find_first_data_column_xlsx(ws, cmd.data_location.row)
+                    self.logger.debug(f"      数据行{cmd.data_location.row + 1}，第一个有数据的列: {first_data_col}")
+                    if first_data_col == 1:  # 如果没有找到有数据的列（默认返回1），使用命令所在的列
+                        first_data_col = cmd.location.col + 1  # openpyxl是1-based
+                        self.logger.debug(f"      未找到，使用命令所在列: {first_data_col}")
+
+                    comments_to_add.append((adjusted_data_row, first_data_col - 1, comment_text))  # xlsxwriter是0-based
+
+                    result['changes'].append({
+                        'type': 'forEach',
+                        'row': cmd.location.row + 1,
+                        'action': f'删除forEach标签行，添加注释: {comment_text} (位置: {get_column_letter(first_data_col)}{adjusted_data_row + 1})'
+                    })
+                    result['converted_commands'] += 1
+
+                    # 明确日志：JXLS 1.x → 2.x 迁移
+                    self.logger.info(f"      🔄 迁移 JXLS 1.x → 2.x: jx:forEach → jx:each")
+                    self.logger.info(f"         原始指令: {cmd.raw_text[:60]}...")
+                    self.logger.info(f"         迁移结果: {comment_text}")
+
+                else:
+                    self.logger.warning(f"      ⚠️ 未找到forEach结束标签")
+
+            elif isinstance(cmd, IfCommand):
+                end_row = self.find_end_tag_xlsx(ws, cmd.location.row, '/jx:if')
+                if end_row is not None:
+                    cmd.end_location = CommandLocation(end_row, cmd.location.col, cmd.location.sheet_name)
+                    cmd.data_location = CommandLocation(cmd.location.row + 1, cmd.location.col, cmd.location.sheet_name)
+
+                    rows_to_delete.add(cmd.location.row)
+                    rows_to_delete.add(end_row)
+
+                    last_col = self.find_last_data_column_xlsx(ws, cmd.data_location.row)
+                    adjusted_data_row = cmd.data_location.row - len(
+                        [r for r in rows_to_delete if r < cmd.data_location.row])
+                    last_cell = f"{get_column_letter(last_col)}{adjusted_data_row + 1}"
+
+                    comment_text = cmd.to_jx_if_v2(last_cell)
+
+                    # 修复：找到数据行的第一个有数据的列
+                    first_data_col = self.find_first_data_column_xlsx(ws, cmd.data_location.row)
+                    if first_data_col == 1:
+                        first_data_col = cmd.location.col + 1
+
+                    comments_to_add.append((adjusted_data_row, first_data_col - 1, comment_text))
+
+                    result['changes'].append({
+                        'type': 'if',
+                        'row': cmd.location.row + 1,
+                        'action': f'删除if标签行，添加注释: {comment_text} (位置: {get_column_letter(first_data_col)}{adjusted_data_row + 1})'
+                    })
+                    result['converted_commands'] += 1
+
+            elif isinstance(cmd, AreaCommand):
+                area_commands.append(cmd)
+                # 现有的area命令 - 在原始位置添加注释
+                comment_text = cmd.to_jx_area_v2()
+                # 计算调整后的行号（考虑删除的行）
+                adjusted_row = cmd.location.row - len([r for r in rows_to_delete if r < cmd.location.row])
+                comments_to_add.append((adjusted_row, cmd.location.col, comment_text))
+
+                result['changes'].append({
+                    'type': 'area',
+                    'row': cmd.location.row + 1,
+                    'action': f'保留area命令: {comment_text}'
+                })
+                result['converted_commands'] += 1
+                # 明确日志：JXLS 2.x 保留 area 指令
+                self.logger.info(f"      🔄 JXLS 2.x 保留 area 指令: {comment_text}")
+
+            elif isinstance(cmd, MultiSheetCommand):
+                comment_text = cmd.to_jx_multi_sheet_v2()
+                comments_to_add.append((cmd.location.row, cmd.location.col, comment_text))
+                rows_to_delete.add(cmd.location.row)
+
+                result['changes'].append({
+                    'type': 'multiSheet',
+                    'row': cmd.location.row + 1,
+                    'action': f'转换multiSheet，添加注释: {comment_text}'
+                })
+                result['converted_commands'] += 1
+
+        self.logger.debug(f"      总共标记删除 {len(rows_to_delete)} 行")
+        self.logger.debug(f"      需要添加 {len(comments_to_add)} 个注释")
+
+        # 将 ws 转换为列表以便索引访问
+        all_rows = list(ws.iter_rows())
+
+        # 复制所有单元格（跳过要删除的行）
+        row_mapping = {}  # 旧行号 -> 新行号
+        new_row = 0  # xlsxwriter 使用 0-based 索引
+
+        for row_idx, row in enumerate(all_rows):
+            if row_idx in rows_to_delete:
+                continue
+
+            row_mapping[row_idx] = new_row
+
+            # 逐列处理单元格
+            for col_idx, cell in enumerate(row):
+                # 处理单元格值
+                cell_value = cell.value
+
+                # 调试输出：显示每个单元格的复制
+                if cell_value:
+                    self.logger.debug(f"      复制单元格 {get_column_letter(col_idx + 1)}{new_row + 1}: {str(cell_value)[:30]}")
+
+                # 处理jx:out指令（在单元格文本中）
+                if isinstance(cell_value, str):
+                    # 替换所有的jx:out为表达式
+                    new_value = re.sub(
+                        r'<jx:out\s+select="([^"]+)"\s*/>',
+                        lambda m: f'${{{m.group(1)}}}',
+                        cell_value
+                    )
+                    if new_value != cell_value:
+                        cell_value = new_value
+                        result['changes'].append({
+                            'type': 'out',
+                            'row': row_idx + 1,
+                            'col': col_idx + 1,
+                            'action': f'转换jx:out为表达式: {cell_value}'
+                        })
+                        result['converted_commands'] += 1
+
+                # 写入单元格 - xlsxwriter 自动使用共享字符串表
+                if cell_value is not None:
+                    str_value = str(cell_value)
+                    xlsx_sheet.write(new_row, col_idx, str_value)  # xlsxwriter 使用 0-based 索引
+                else:
+                    xlsx_sheet.write(new_row, col_idx, '')
+
+            new_row += 1
+
+        # 自动生成area命令（如果没有现有的）
+        if not area_commands and (rows_to_delete or comments_to_add):
+            # 计算数据区域
+            last_data_row = new_row
+            last_data_col = 0
+
+            # 找到最后一个有数据的列
+            for row_idx, row in enumerate(all_rows):
+                if row_idx not in rows_to_delete:
+                    for col_idx, cell in enumerate(row):
+                        if cell.value:
+                            last_data_col = max(last_data_col, col_idx + 1)
+
+            if last_data_row > 0 and last_data_col > 0:
+                last_cell = f"{get_column_letter(last_data_col)}{last_data_row}"
+                area_comment = f'jx:area(lastCell="{last_cell}")'
+
+                # 在A1单元格添加area注释
+                comments_to_add.append((0, 0, area_comment))  # row=0, col=0 (0-based)
+
+                result['changes'].append({
+                    'type': 'area',
+                    'row': 1,  # Excel行号从1开始
+                    'col': 1,
+                    'action': f'自动添加area命令: {area_comment}'
+                })
+                result['converted_commands'] += 1
+                # 明确日志：自动生成 JXLS 2.x area 指令
+                self.logger.info(f"      🔄 自动生成 JXLS 2.x area 指令: {area_comment}")
+
+        # 复制列宽
+        try:
+            for col_idx in range(ws.max_column):
+                col_letter = get_column_letter(col_idx + 1)
+                if col_letter in ws.column_dimensions:
+                    col_width = ws.column_dimensions[col_letter].width
+                    if col_width:
+                        xlsx_sheet.set_column(col_idx, col_idx, col_width)
+        except Exception as e:
+            self.logger.debug(f"      复制列宽失败: {e}")
+
+        # 复制行高
+        try:
+            for row_idx in range(len(all_rows)):
+                if row_idx in rows_to_delete:
+                    continue
+                new_row_idx = row_mapping.get(row_idx)
+                if new_row_idx is not None:
+                    if (row_idx + 1) in ws.row_dimensions:
+                        row_height = ws.row_dimensions[row_idx + 1].height
+                        if row_height:
+                            xlsx_sheet.set_row(new_row_idx, row_height)
+        except Exception as e:
+            self.logger.debug(f"      复制行高失败: {e}")
+
+        # 处理合并单元格
+        try:
+            for merged_range in ws.merged_cells.ranges:
+                min_row, min_col, max_row, max_col = merged_range.min_row - 1, merged_range.min_col - 1, merged_range.max_row - 1, merged_range.max_col - 1
+                # 检查是否在删除的行中
+                if any(r in rows_to_delete for r in range(min_row, max_row + 1)):
+                    continue
+
+                # 映射到新的行号
+                new_min_row = row_mapping.get(min_row)
+                new_max_row = row_mapping.get(max_row)
+                if new_min_row is not None and new_max_row is not None:
+                    # xlsxwriter 使用 0-based 索引
+                    xlsx_sheet.merge_range(new_min_row, min_col, new_max_row, max_col, '')
+        except Exception as e:
+            self.logger.debug(f"      复制合并单元格失败: {e}")
+
+        # 添加注释 - xlsxwriter 使用 write_comment
+        for row, col, comment_text in comments_to_add:
+            try:
+                # xlsxwriter 使用 0-based 索引
+                xlsx_sheet.write_comment(row, col, comment_text)
+                self.logger.debug(f"      添加注释到 {get_column_letter(col + 1)}{row + 1}: {comment_text}")
             except Exception as e:
                 self.logger.debug(f"      添加注释失败 row={row + 1}, col={col + 1}: {e}")
 

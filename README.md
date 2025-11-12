@@ -1,7 +1,7 @@
 # JXLS Migration Tool
 
 
-[![Version](https://img.shields.io/badge/version-3.0-blue.svg)](https://github.com/your-org/jxls-migration-tool)
+[![Version](https://img.shields.io/badge/version-3.4+-blue.svg)](https://github.com/your-org/jxls-migration-tool)
 [![Python](https://img.shields.io/badge/python-3.6+-green.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 
@@ -15,6 +15,7 @@ A powerful, production-ready tool for automated migration from JXLS 1.x to JXLS 
 - **Complete JXLS Instruction Support**: Migrates all JXLS instructions (forEach, if, out, area, multiSheet)
 - **Smart File Format Detection**: Auto-detects Excel file format regardless of extension
 - **Format Preservation**: Maintains all cell styles, column widths, row heights, merged cells
+- **XlsxWriter Integration**: Uses xlsxwriter for both .xls and .xlsx files with automatic shared strings table (避免富文本问题，POI 兼容性更好)
 - **Windows Terminal Optimized**: Auto-detects and configures UTF-8 support
 - **Detailed Reporting**: Generates Markdown, JSON, and DEBUG logs
 - **Production Ready**: Comprehensive error handling and logging
@@ -195,8 +196,27 @@ After migration, three types of reports are generated:
 
 ### Q: Missing xlrd library error
 ```bash
-pip install xlrd openpyxl
+pip install xlrd openpyxl xlsxwriter
 ```
+
+### Q: Missing xlsxwriter library error
+```bash
+pip install xlsxwriter
+```
+**Note**: xlsxwriter is required for all migrations. It provides automatic shared strings table support and avoids rich text format issues.
+
+### Q: Rich text format issues / POI compatibility problems
+**Solution**: The tool now uses xlsxwriter for both .xls and .xlsx files (v3.4+), which automatically uses shared strings table to avoid rich text format issues.
+
+**Technical Details**:
+- **Before v3.4**: .xlsx files used openpyxl which could retain rich text formatting
+- **After v3.4**: All files (.xls and .xlsx) use xlsxwriter with automatic shared strings table
+- **Benefits**: Better Apache POI 5.4.0+ compatibility, no rich text issues
+
+If you still encounter rich text issues:
+1. Verify you're using xlsxwriter: Check logs for "使用 XlsxWriter 写入文件"
+2. Update xlsxwriter: `pip install --upgrade xlsxwriter`
+3. Re-run migration with `--verbose` flag to see detailed processing logs
 
 ### Q: File has .xls extension but is actually .xlsx format
 This is normal! The tool auto-detects and handles this. Use `--keep-extension` to preserve original extension.
@@ -249,8 +269,8 @@ MIT License - see [LICENSE](LICENSE) file for details.
 ## 👨‍💻 Author
 
 **fivefish**
-- Version: 3.0
-- Date: 2025-11-07
+- Version: 3.4+ (富文本问题修复版)
+- Date: 2025-11-12
 
 ## 🙏 Acknowledgments
 
